@@ -19,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 
 interface AnalysisResult {
   location: string;
@@ -40,30 +41,48 @@ export default function Home() {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parseData = (data: string) => {
     // Splitting by newline to separate entries
-    return data.split('\n').map(entry => {
+    return data.split('\n').slice(1).map(entry => { // Skip the header row
       const parts = entry.split(',').map(item => item.trim());
-      if (parts.length < 3) {
+      if (parts.length < 8) {
         return null; // Skip incomplete entries
       }
-      const [location, time, ...sensorValues] = parts;
-      if (!location || !time || sensorValues.length === 0) {
+      const [time, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
+      if (!location || !time || !waterTemperature || !salinity || !pHLevel || !dissolvedOxygen || !turbidity || !nitrate) {
         return null; // Skip entries with missing data
       }
       return {
         location,
         time,
-        sensorValues: sensorValues.join(','), // Joining sensor values in case they contain commas
+        waterTemperature,
+        salinity,
+        pHLevel,
+        dissolvedOxygen,
+        turbidity,
+        nitrate,
+        sensorValues: `${waterTemperature}, ${salinity}, ${pHLevel}, ${dissolvedOxygen}, ${turbidity}, ${nitrate}`,
       };
-    }).filter(parsed => parsed !== null) as {location: string, time: string, sensorValues: string}[]; // Filtering out null entries
+    }).filter(parsed => parsed !== null) as {
+      location: string;
+      time: string;
+      waterTemperature: string;
+      salinity: string;
+      pHLevel: string;
+      dissolvedOxygen: string;
+      turbidity: string;
+      nitrate: string;
+      sensorValues: string;
+    }[]; // Filtering out null entries
   };
 
   const analyzeData = async () => {
     setIsLoading(true);
     setAnalysisResults([]);
     setOverallSuitability(null);
+    setErrorMessage(null);
 
     const parsedData = parseData(sensorData);
 
@@ -93,11 +112,18 @@ export default function Home() {
           };
         } catch (error: any) {
           console.error('Error analyzing data:', error);
+          let message = 'An unexpected error occurred.';
+          if (error.message.includes('429 Too Many Requests')) {
+            message = 'Too many requests. Please try again after some time.';
+          } else {
+            message = `Error analyzing data: ${error.message}`;
+          }
+          setErrorMessage(message); // Set the error message state
           return {
             location: item.location,
             time: item.time,
             data: item.sensorValues,
-            summary: `Error analyzing data: ${error.message}`,
+            summary: message,
             improvements: null,
             isSuitable: null,
           };
@@ -127,12 +153,12 @@ export default function Home() {
             <CardTitle className="text-2xl">CoralSafe: Sensor Data Analyzer</CardTitle>
             <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
-              Use a comma-separated format: location, time, sensor data.
+              Use a comma-separated format: Date, Location, Water_Temperature_C, Salinity_PSU, pH_Level, Dissolved_Oxygen_mg_L, Turbidity_NTU, Nitrate_mg_L.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Textarea
-              placeholder="Location, Time, Sensor Data (e.g., Reef1, 08:00, 28C, 8.2pH, 35ppt)"
+              placeholder="Date, Location, Water_Temperature_C, Salinity_PSU, pH_Level, Dissolved_Oxygen_mg_L, Turbidity_NTU, Nitrate_mg_L (e.g., 2024-07-24, Reef1, 28, 35, 8.2, 7, 2, 0.5)"
               rows={4}
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
@@ -150,6 +176,12 @@ export default function Home() {
             <Button onClick={analyzeData} disabled={isLoading} className="w-full">
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
+            {errorMessage && (
+              <Alert variant="destructive">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
 
@@ -164,7 +196,13 @@ export default function Home() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Time</TableHead>
-                    <TableHead>Sensor Data</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Water Temperature</TableHead>
+                    <TableHead>Salinity</TableHead>
+                    <TableHead>pH Level</TableHead>
+                    <TableHead>Dissolved Oxygen</TableHead>
+                    <TableHead>Turbidity</TableHead>
+                    <TableHead>Nitrate</TableHead>
                     <TableHead>Summary</TableHead>
                     <TableHead>Suitability</TableHead>
                     <TableHead>Improvements</TableHead>
@@ -174,7 +212,13 @@ export default function Home() {
                   {analysisResults.map((result, index) => (
                     <TableRow key={index}>
                       <TableCell>{result.time}</TableCell>
-                      <TableCell>{result.data}</TableCell>
+                      <TableCell>{result.location}</TableCell>
+                      <TableCell>{result.data.split(',')[0]}</TableCell>
+                      <TableCell>{result.data.split(',')[1]}</TableCell>
+                      <TableCell>{result.data.split(',')[2]}</TableCell>
+                      <TableCell>{result.data.split(',')[3]}</TableCell>
+                      <TableCell>{result.data.split(',')[4]}</TableCell>
+                      <TableCell>{result.data.split(',')[5]}</TableCell>
                       <TableCell>{result.summary}</TableCell>
                       <TableCell>
                         {result.isSuitable === null ? (
