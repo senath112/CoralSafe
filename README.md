@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+# Firebase Studio
+
+This is a NextJS starter in Firebase Studio.
+
+To get started, take a look at src/app/page.tsx.
+=======
 # 📄 Reef_A_Marine_Environment_Dataset
 
 This dataset contains simulated marine environmental data collected from **Reef_A** across **April 2025**, captured at 6-hour intervals.
@@ -68,3 +75,4 @@ Each value **includes units** for realism.
 - Seasonal datasets (not just April)
 
 ---
+>>>>>>> acf85e447b1bb34d77c2697ecb17c515a6a87366
