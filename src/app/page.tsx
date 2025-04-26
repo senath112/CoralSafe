@@ -64,7 +64,7 @@ export default function Home() {
 
   const parseData = (data: string) => {
     // Splitting by newline to separate entries
-    return data.split('\n').slice(1).map(entry => { // Skip the header row
+    return data.split('\n').slice(1, 6).map(entry => { // Skip the header row and limit to 5 entries
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length < 8) {
         return null; // Skip incomplete entries
@@ -243,6 +243,7 @@ export default function Home() {
                   <TableRow>
                     <TableHead className="text-left font-medium">Time</TableHead>
                     <TableHead className="text-left font-medium">Location</TableHead>
+                      <TableHead className="text-left font-medium">Suitability</TableHead>
                     <TableHead className="text-left font-medium">Water Temperature</TableHead>
                     <TableHead className="text-left font-medium">Salinity</TableHead>
                     <TableHead className="text-left font-medium">pH Level</TableHead>
@@ -250,7 +251,7 @@ export default function Home() {
                     <TableHead className="text-left font-medium">Turbidity</TableHead>
                     <TableHead className="text-left font-medium">Nitrate</TableHead>
                     <TableHead className="text-left font-medium">Summary</TableHead>
-                    <TableHead className="text-left font-medium">Suitability</TableHead>
+                   
                     <TableHead className="text-left font-medium">Improvements</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -259,6 +260,19 @@ export default function Home() {
                     <TableRow key={index}>
                       <TableCell className="py-2">{result.time}</TableCell>
                       <TableCell className="py-2">{result.location}</TableCell>
+                       <TableCell className="py-2">
+                        {result.isSuitable === null ? (
+                          'Analyzing...'
+                        ) : result.isSuitable ? (
+                          <Badge variant="outline" className="bg-green-500 text-white">
+                            Suitable
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-500 text-white">
+                            Threatening
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="py-2">{result.data.split(',')[0]}</TableCell>
                       <TableCell className="py-2">{result.data.split(',')[1]}</TableCell>
                       <TableCell className="py-2">{result.data.split(',')[2]}</TableCell>
@@ -281,19 +295,7 @@ export default function Home() {
                           'N/A'
                         )}
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.isSuitable === null ? (
-                          'Analyzing...'
-                        ) : result.isSuitable ? (
-                          <Badge variant="outline" className="bg-green-500 text-white">
-                            Suitable
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-red-500 text-white">
-                            Threatening
-                          </Badge>
-                        )}
-                      </TableCell>
+                    
                       <TableCell className="py-2">
                         {result.improvements ? (
                           <Accordion type="single" collapsible>
@@ -342,3 +344,4 @@ export default function Home() {
     </div>
   );
 }
+
