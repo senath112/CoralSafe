@@ -9,7 +9,7 @@ import {suggestImprovements} from '@/ai/flows/suggest-improvements';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {Input} from '@/components/ui/input';
-import {Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
+import {Table, TableBody, TableCaption, TableHead, TableHeader, TableRow} from '@/components/ui/table';
 import {
   Chart,
   Line,
@@ -196,9 +196,9 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            
               Sensor Data Input
-            </div>
+            
             Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
               placeholder="Paste sensor data here"
@@ -344,4 +344,5 @@ export default function Home() {
     </div>
   );
 }
+
 
