@@ -10,6 +10,15 @@ import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {Input} from '@/components/ui/input';
 import {Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
+import {
+  Chart,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 interface AnalysisResult {
   location: string;
@@ -18,6 +27,11 @@ interface AnalysisResult {
   summary: string | null;
   improvements: string | null;
   isSuitable: boolean | null;
+}
+
+interface ChartData {
+  time: string;
+  suitability: number | null;
 }
 
 export default function Home() {
@@ -50,8 +64,8 @@ export default function Home() {
       parsedData.map(async (item) => {
         try {
           const dataSummaryResult = await generateDataSummary({sensorData: item.sensorValues});
-          const isThreatening = dataSummaryResult.summary.toLowerCase().includes('threatening');
-          const isSuitable = !isThreatening;
+          const isThreatening = !dataSummaryResult.isSuitable;
+          const isSuitable = dataSummaryResult.isSuitable;
           let improvements = null;
 
           if (isThreatening) {
@@ -87,11 +101,16 @@ export default function Home() {
     setAnalysisResults(results);
 
     // Determine overall suitability
-    const allSuitable = results.every(result => result.isSuitable === true);
+    const allSuitable = results.every(result => result.isSuitable === true || result.isSuitable === null);
     setOverallSuitability(allSuitable);
 
     setIsLoading(false);
   };
+
+  const chartData: ChartData[] = analysisResults.map(result => ({
+    time: result.time,
+    suitability: result.isSuitable === null ? null : result.isSuitable ? 1 : 0,
+  }));
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -178,6 +197,17 @@ export default function Home() {
                   )}
                 </div>
               )}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold">Suitability Over Time</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData}>
+                    <XAxis dataKey="time" />
+                    <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(tick) => (tick === 1 ? 'Suitable' : 'Threatening')} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="suitability" stroke="#8884d8" name="Suitability" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
         )}

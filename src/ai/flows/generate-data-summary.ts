@@ -18,7 +18,8 @@ const GenerateDataSummaryInputSchema = z.object({
 export type GenerateDataSummaryInput = z.infer<typeof GenerateDataSummaryInputSchema>;
 
 const GenerateDataSummaryOutputSchema = z.object({
-  summary: z.string().describe('A summary of the sensor data and its implications for coral suitability.'),
+  summary: z.string().describe('A summary of the sensor data, indicating if it is suitable or threatening for coral.'),
+  isSuitable: z.boolean().describe('Boolean value indicating suitability. True for suitable, False for threatening.'),
 });
 export type GenerateDataSummaryOutput = z.infer<typeof GenerateDataSummaryOutputSchema>;
 
@@ -37,12 +38,13 @@ const prompt = ai.definePrompt({
   },
   output: {
     schema: z.object({
-      summary: z.string().describe('A summary of the sensor data and its implications for coral suitability.'),
+      summary: z.string().describe('A summary of the sensor data, indicating if it is suitable or threatening for coral.'),
+      isSuitable: z.boolean().describe('Boolean value indicating suitability. True for suitable, False for threatening.'),
     }),
   },
   prompt: `You are an expert marine biologist specializing in coral health.
 
-You will receive sensor data from a marine environment. Provide a concise summary of the data, highlighting the key parameters (e.g., temperature, salinity, pH) and their implications for coral suitability. Explain whether the data suggests a suitable or threatening environment for coral.
+You will receive sensor data from a marine environment. Provide a very concise summary (one sentence max) indicating whether the data suggests a suitable or threatening environment for coral. Also, set the isSuitable field accordingly (true if suitable, false if threatening).
 
 Sensor Data: {{{sensorData}}}`,
 });
