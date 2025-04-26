@@ -6,8 +6,6 @@ import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {generateDataSummary} from '@/ai/flows/generate-data-summary';
 import {suggestImprovements} from '@/ai/flows/suggest-improvements';
-import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {Info} from 'lucide-react';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {Input} from '@/components/ui/input';
@@ -27,6 +25,7 @@ export default function Home() {
   const [threshold, setThreshold] = useState(10); // Default threshold value
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
 
   const parseData = (data: string) => {
     // Splitting by newline to separate entries
@@ -43,6 +42,7 @@ export default function Home() {
   const analyzeData = async () => {
     setIsLoading(true);
     setAnalysisResults([]);
+    setOverallSuitability(null);
 
     const parsedData = parseData(sensorData);
 
@@ -85,6 +85,11 @@ export default function Home() {
     );
 
     setAnalysisResults(results);
+
+    // Determine overall suitability
+    const allSuitable = results.every(result => result.isSuitable === true);
+    setOverallSuitability(allSuitable);
+
     setIsLoading(false);
   };
 
@@ -95,7 +100,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle className="text-2xl">CoralSafe: Sensor Data Analyzer</CardTitle>
             <CardDescription>
-              Enter sensor data for multiple reef locations and times, separated by newlines.
+              Enter sensor data for a reef location over multiple times, separated by newlines.
               Use a comma-separated format: location, time, sensor data.
             </CardDescription>
           </CardHeader>
@@ -126,13 +131,12 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle>Analysis Results</CardTitle>
-              <CardDescription>Detailed analysis of sensor data for each location and time.</CardDescription>
+              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Location</TableHead>
                     <TableHead>Time</TableHead>
                     <TableHead>Sensor Data</TableHead>
                     <TableHead>Summary</TableHead>
@@ -143,7 +147,6 @@ export default function Home() {
                 <TableBody>
                   {analysisResults.map((result, index) => (
                     <TableRow key={index}>
-                      <TableCell>{result.location}</TableCell>
                       <TableCell>{result.time}</TableCell>
                       <TableCell>{result.data}</TableCell>
                       <TableCell>{result.summary}</TableCell>
@@ -165,6 +168,16 @@ export default function Home() {
                   ))}
                 </TableBody>
               </Table>
+              {overallSuitability !== null && (
+                <div className="mt-4">
+                  <h3 className="text-lg font-semibold">Overall Suitability:</h3>
+                  {overallSuitability ? (
+                    <Badge variant="outline" className="bg-green-500 text-white">Suitable</Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-red-500 text-white">Threatening</Badge>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
