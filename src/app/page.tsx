@@ -9,7 +9,7 @@ import {suggestImprovements} from '@/ai/flows/suggest-improvements';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {Input} from '@/components/ui/input';
-import {Table, TableBody, TableCaption, TableHead, TableHeader, TableRow} from '@/components/ui/table';
+import {Table, TableBody, TableCaption, TableHead, TableHeader, TableRow, TableCell} from '@/components/ui/table';
 import {
   Chart,
   Line,
@@ -344,5 +344,3 @@ export default function Home() {
     </div>
   );
 }
-
-
