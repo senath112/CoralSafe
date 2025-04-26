@@ -20,6 +20,7 @@ import {
   YAxis,
 } from 'recharts';
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import {Progress} from "@/components/ui/progress";
 
 interface AnalysisResult {
   location: string;
@@ -40,6 +41,7 @@ export default function Home() {
   const [threshold, setThreshold] = useState(10); // Default threshold value
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -80,11 +82,14 @@ export default function Home() {
 
   const analyzeData = async () => {
     setIsLoading(true);
+    setProgress(0);
     setAnalysisResults([]);
     setOverallSuitability(null);
     setErrorMessage(null);
 
     const parsedData = parseData(sensorData);
+    const totalEntries = parsedData.length;
+    let completedEntries = 0;
 
     const results = await Promise.all(
       parsedData.map(async (item) => {
@@ -101,6 +106,9 @@ export default function Home() {
             });
             improvements = improvementsResult.suggestedActions;
           }
+
+          completedEntries++;
+          setProgress((completedEntries / totalEntries) * 100);
 
           return {
             location: item.location,
@@ -138,6 +146,7 @@ export default function Home() {
     setOverallSuitability(allSuitable);
 
     setIsLoading(false);
+    setProgress(100);
   };
 
   const chartData: ChartData[] = analysisResults.map(result => ({
@@ -176,6 +185,9 @@ export default function Home() {
             <Button onClick={analyzeData} disabled={isLoading} className="w-full">
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
+            {isLoading && (
+              <Progress value={progress} className="w-full" />
+            )}
             {errorMessage && (
               <Alert variant="destructive">
                 <AlertTitle>Error</AlertTitle>
