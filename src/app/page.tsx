@@ -38,6 +38,21 @@ interface ChartData {
   suitability: number | null;
 }
 
+// Function to handle retries with exponential backoff
+async function retryRequest<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (maxRetries > 0 && error.message.includes('429 Too Many Requests')) {
+      console.log(`Retrying after ${delay}ms. Retries left: ${maxRetries}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryRequest(fn, maxRetries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
+
 export default function Home() {
   const [sensorData, setSensorData] = useState('');
   const [threshold, setThreshold] = useState(10); // Default threshold value
@@ -96,16 +111,18 @@ export default function Home() {
     const results = await Promise.all(
       parsedData.map(async (item) => {
         try {
-          const dataSummaryResult = await generateDataSummary({sensorData: item.sensorValues});
+          // Wrap the generateDataSummary call with retryRequest
+          const dataSummaryResult = await retryRequest(() => generateDataSummary({sensorData: item.sensorValues}));
           const isThreatening = !dataSummaryResult.isSuitable;
           const isSuitable = dataSummaryResult.isSuitable;
           let improvements = null;
 
           if (isThreatening) {
-            const improvementsResult = await suggestImprovements({
+            // Wrap the suggestImprovements call with retryRequest
+            const improvementsResult = await retryRequest(() => suggestImprovements({
               sensorData: item.sensorValues,
               threateningFactors: dataSummaryResult.summary,
-            });
+            }));
             improvements = improvementsResult.suggestedActions;
           }
 
@@ -179,8 +196,12 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              Sensor Data Input
+            </div>
+            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
-              placeholder="Date, Location, Water_Temperature_C, Salinity_PSU, pH_Level, Dissolved_Oxygen_mg_L, Turbidity_NTU, Nitrate_mg_L (e.g., 2024-07-24, Reef1, 28, 35, 8.2, 7, 2, 0.5)"
+              placeholder="Paste sensor data here"
               rows={4}
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
@@ -321,4 +342,3 @@ export default function Home() {
     </div>
   );
 }
-
