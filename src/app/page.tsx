@@ -27,7 +27,12 @@ import Image from 'next/image';
 interface AnalysisResult {
   location: string;
   time: string;
-  data: string;
+  waterTemperature: string;
+  salinity: string;
+  pHLevel: string;
+  dissolvedOxygen: string;
+  turbidity: string;
+  nitrate: string;
   summary: string | null;
   improvements: string | null;
   isSuitable: boolean | null;
@@ -35,7 +40,12 @@ interface AnalysisResult {
 
 interface ChartData {
   time: string;
-  suitability: number | null;
+  waterTemperature: number | null;
+  salinity: number | null;
+  pHLevel: number | null;
+  dissolvedOxygen: number | null;
+  turbidity: number | null;
+  nitrate: number | null;
 }
 
 // Function to handle retries with exponential backoff
@@ -132,7 +142,12 @@ export default function Home() {
           return {
             location: item.location,
             time: item.time,
-            data: item.sensorValues,
+            waterTemperature: item.waterTemperature,
+            salinity: item.salinity,
+            pHLevel: item.pHLevel,
+            dissolvedOxygen: item.dissolvedOxygen,
+            turbidity: item.turbidity,
+            nitrate: item.nitrate,
             summary: dataSummaryResult.summary,
             improvements: improvements,
             isSuitable: isSuitable,
@@ -149,7 +164,12 @@ export default function Home() {
           return {
             location: item.location,
             time: item.time,
-            data: item.sensorValues,
+            waterTemperature: item.waterTemperature,
+            salinity: item.salinity,
+            pHLevel: item.pHLevel,
+            dissolvedOxygen: item.dissolvedOxygen,
+            turbidity: item.turbidity,
+            nitrate: item.nitrate,
             summary: message,
             improvements: null,
             isSuitable: null,
@@ -170,8 +190,32 @@ export default function Home() {
 
   const chartData: ChartData[] = analysisResults.map(result => ({
     time: result.time,
-    suitability: result.isSuitable === null ? null : result.isSuitable ? 1 : 0,
+    waterTemperature: parseFloat(result.waterTemperature),
+    salinity: parseFloat(result.salinity),
+    pHLevel: parseFloat(result.pHLevel),
+    dissolvedOxygen: parseFloat(result.dissolvedOxygen),
+    turbidity: parseFloat(result.turbidity),
+    nitrate: parseFloat(result.nitrate),
   }));
+
+  const predictFutureData = (data: ChartData[], parameter: keyof ChartData): (number | null)[] => {
+    const lastDataPoints = data.slice(-5).map(item => item[parameter]).filter((value): value is number => typeof value === 'number');
+    if (lastDataPoints.length === 0) {
+      return Array(5).fill(null); // Return null if no data available
+    }
+    const averageChange = lastDataPoints.length > 1 ?
+      (lastDataPoints[lastDataPoints.length - 1] - lastDataPoints[0]) / (lastDataPoints.length - 1) :
+      0;
+
+    let prediction = lastDataPoints[lastDataPoints.length - 1];
+    const predictedValues: (number | null)[] = [];
+    for (let i = 0; i < 5; i++) {
+      prediction += averageChange;
+      predictedValues.push(prediction);
+    }
+    return predictedValues;
+  };
+
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -243,7 +287,7 @@ export default function Home() {
                   <TableRow>
                     <TableHead className="text-left font-medium">Time</TableHead>
                     <TableHead className="text-left font-medium">Location</TableHead>
-                      <TableHead className="text-left font-medium">Suitability</TableHead>
+                    <TableHead className="text-left font-medium">Suitability</TableHead>
                     <TableHead className="text-left font-medium">Water Temperature</TableHead>
                     <TableHead className="text-left font-medium">Salinity</TableHead>
                     <TableHead className="text-left font-medium">pH Level</TableHead>
@@ -273,12 +317,12 @@ export default function Home() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[0]}</TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[1]}</TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[2]}</TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[3]}</TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[4]}</TableCell>
-                      <TableCell className="py-2">{result.data.split(',')[5]}</TableCell>
+                      <TableCell className="py-2">{result.waterTemperature}</TableCell>
+                      <TableCell className="py-2">{result.salinity}</TableCell>
+                      <TableCell className="py-2">{result.pHLevel}</TableCell>
+                      <TableCell className="py-2">{result.dissolvedOxygen}</TableCell>
+                      <TableCell className="py-2">{result.turbidity}</TableCell>
+                      <TableCell className="py-2">{result.nitrate}</TableCell>
                       <TableCell className="py-2">
                       {result.summary ? (
                           <Accordion type="single" collapsible>
@@ -326,17 +370,39 @@ export default function Home() {
                   )}
                 </div>
               )}
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold">Suitability Over Time</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData}>
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(tick) => (tick === 1 ? 'Suitable' : 'Threatening')} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="suitability" stroke="#8884d8" name="Suitability" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {['waterTemperature', 'salinity', 'pHLevel', 'dissolvedOxygen', 'turbidity', 'nitrate'].map((parameter) => {
+                const futureValues = predictFutureData(chartData, parameter as keyof ChartData);
+                const dataForChart = [...chartData.map(item => ({ time: item.time, value: item[parameter] })),
+                  ...futureValues.map((value, index) => ({ time: `+${index + 1}`, value: value }))];
+
+                const displayParameter = parameter
+                  .replace(/([A-Z])/g, ' $1')
+                  .replace(/^./, function (str) {
+                    return str.toUpperCase();
+                  });
+
+                return (
+                  <Card key={parameter}>
+                    <CardHeader>
+                      <CardTitle>{displayParameter} Over Time</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={dataForChart}>
+                          <XAxis dataKey="time" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="value" stroke="#8884d8" name={displayParameter} />
+                          <Line type="monotone" dataKey="value" stroke="#ff7f50" name={`Predicted ${displayParameter}`} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
             </CardContent>
           </Card>
         )}
