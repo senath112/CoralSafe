@@ -44,13 +44,20 @@ export default function Home() {
   const parseData = (data: string) => {
     // Splitting by newline to separate entries
     return data.split('\n').map(entry => {
-      const [location, time, ...sensorValues] = entry.split(',').map(item => item.trim());
+      const parts = entry.split(',').map(item => item.trim());
+      if (parts.length < 3) {
+        return null; // Skip incomplete entries
+      }
+      const [location, time, ...sensorValues] = parts;
+      if (!location || !time || sensorValues.length === 0) {
+        return null; // Skip entries with missing data
+      }
       return {
         location,
         time,
         sensorValues: sensorValues.join(','), // Joining sensor values in case they contain commas
       };
-    }).filter(parsed => parsed.location && parsed.time && parsed.sensorValues); // Filtering out incomplete entries
+    }).filter(parsed => parsed !== null) as {location: string, time: string, sensorValues: string}[]; // Filtering out null entries
   };
 
   const analyzeData = async () => {
