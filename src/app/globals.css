@@ -8,13 +8,13 @@ body {
 
 @layer base {
   :root {
-    --background: 51 38% 91%;
-    --foreground: 0 0% 3.9%;
-    --card: 51 38% 91%;
-    --card-foreground: 0 0% 3.9%;
+    --background: 240 78% 97%;
+    --foreground: 224 71% 10%;
+    --card: 240 78% 97%;
+    --card-foreground: 224 71% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 144 54% 26%;
+    --popover-foreground: 224 71% 10%;
+    --primary: 160 48% 32%;
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
@@ -43,13 +43,13 @@ body {
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
+    --background: 240 10% 14%;
+    --foreground: 240 80% 98%;
+    --card: 240 10% 14%;
+    --card-foreground: 240 80% 98%;
+    --popover: 240 10% 14%;
+    --popover-foreground: 240 80% 98%;
+    --primary: 160 48% 32%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
@@ -86,4 +86,5 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
 

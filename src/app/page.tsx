@@ -22,6 +22,7 @@ import {
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
+import Image from 'next/image';
 
 interface AnalysisResult {
   location: string;
@@ -160,7 +161,18 @@ export default function Home() {
       <div className="max-w-5xl w-full space-y-8">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">CoralSafe: Sensor Data Analyzer</CardTitle>
+            <CardTitle className="text-2xl">
+              <div className="flex items-center">
+                <Image
+                  src="https://picsum.photos/40/40"
+                  alt="CoralSafe Logo"
+                  width={40}
+                  height={40}
+                  className="mr-2 rounded-full"
+                />
+                CoralSafe: Sensor Data Analyzer
+              </div>
+            </CardTitle>
             <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
               Use a comma-separated format: Date, Location, Water_Temperature_C, Salinity_PSU, pH_Level, Dissolved_Oxygen_mg_L, Turbidity_NTU, Nitrate_mg_L.
@@ -183,7 +195,7 @@ export default function Home() {
               />
               <p>Set threshold for suitability analysis</p>
             </div>
-            <Button onClick={analyzeData} disabled={isLoading} className="w-full">
+            <Button onClick={analyzeData} disabled={isLoading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
             {isLoading && (
@@ -205,35 +217,35 @@ export default function Home() {
               <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="rounded-md shadow-md">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="border">Time</TableHead>
-                    <TableHead className="border">Location</TableHead>
-                    <TableHead className="border">Water Temperature</TableHead>
-                    <TableHead className="border">Salinity</TableHead>
-                    <TableHead className="border">pH Level</TableHead>
-                    <TableHead className="border">Dissolved Oxygen</TableHead>
-                    <TableHead className="border">Turbidity</TableHead>
-                    <TableHead className="border">Nitrate</TableHead>
-                    <TableHead className="border">Summary</TableHead>
-                    <TableHead className="border">Suitability</TableHead>
-                    <TableHead className="border">Improvements</TableHead>
+                    <TableHead className="text-left font-medium">Time</TableHead>
+                    <TableHead className="text-left font-medium">Location</TableHead>
+                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
+                    <TableHead className="text-left font-medium">Salinity</TableHead>
+                    <TableHead className="text-left font-medium">pH Level</TableHead>
+                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
+                    <TableHead className="text-left font-medium">Turbidity</TableHead>
+                    <TableHead className="text-left font-medium">Nitrate</TableHead>
+                    <TableHead className="text-left font-medium">Summary</TableHead>
+                    <TableHead className="text-left font-medium">Suitability</TableHead>
+                    <TableHead className="text-left font-medium">Improvements</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => (
                     <TableRow key={index}>
-                      <TableCell className="border">{result.time}</TableCell>
-                      <TableCell className="border">{result.location}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[0]}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[1]}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[2]}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[3]}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[4]}</TableCell>
-                      <TableCell className="border">{result.data.split(',')[5]}</TableCell>
-                      <TableCell className="border">{result.summary}</TableCell>
-                      <TableCell className="border">
+                      <TableCell className="py-2">{result.time}</TableCell>
+                      <TableCell className="py-2">{result.location}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[0]}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[1]}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[2]}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[3]}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[4]}</TableCell>
+                      <TableCell className="py-2">{result.data.split(',')[5]}</TableCell>
+                      <TableCell className="py-2">{result.summary}</TableCell>
+                      <TableCell className="py-2">
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
@@ -246,7 +258,7 @@ export default function Home() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="border">
+                      <TableCell className="py-2">
                         {result.improvements ? (
                           <Accordion type="single" collapsible>
                             <AccordionItem value={`item-${index}`}>
