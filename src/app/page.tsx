@@ -244,7 +244,22 @@ export default function Home() {
                       <TableCell className="py-2">{result.data.split(',')[3]}</TableCell>
                       <TableCell className="py-2">{result.data.split(',')[4]}</TableCell>
                       <TableCell className="py-2">{result.data.split(',')[5]}</TableCell>
-                      <TableCell className="py-2">{result.summary}</TableCell>
+                      <TableCell className="py-2">
+                      {result.summary ? (
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value={`item-summary-${index}`}>
+                              <AccordionTrigger>
+                                View Summary
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                {result.summary}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
                       <TableCell className="py-2">
                         {result.isSuitable === null ? (
                           'Analyzing...'
@@ -306,3 +321,4 @@ export default function Home() {
     </div>
   );
 }
+
