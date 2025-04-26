@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Progress} from "@/components/ui/progress";
+import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 
 interface AnalysisResult {
   location: string;
@@ -245,7 +246,22 @@ export default function Home() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{result.improvements || 'N/A'}</TableCell>
+                      <TableCell>
+                        {result.improvements ? (
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value={`item-${index}`}>
+                              <AccordionTrigger>
+                                View Improvements
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                {result.improvements}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
