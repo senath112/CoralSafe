@@ -13,40 +13,54 @@ import {cn} from '@/lib/utils';
 
 export default function Home() {
   const [sensorData, setSensorData] = useState('');
-  const [summary, setSummary] = useState<string | null>(null);
-  const [improvements, setImprovements] = useState<string | null>(null);
+  const [analysisResults, setAnalysisResults] = useState<
+    {data: string; summary: string | null; improvements: string | null; isSuitable: boolean | null}[]
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuitable, setIsSuitable] = useState<boolean | null>(null);
 
   const analyzeData = async () => {
     setIsLoading(true);
-    setSummary(null);
-    setImprovements(null);
-    setIsSuitable(null);
+    setAnalysisResults([]);
 
-    try {
-      const dataSummaryResult = await generateDataSummary({sensorData});
-      setSummary(dataSummaryResult.summary);
+    // Split the input into individual data entries, assuming each entry is separated by a newline
+    const dataEntries = sensorData.split('\n').filter(entry => entry.trim() !== '');
 
-      // Basic logic to determine suitability based on the summary.
-      // Adjust this logic based on your specific requirements.
-      const isThreatening = dataSummaryResult.summary.toLowerCase().includes('threatening');
-      setIsSuitable(!isThreatening);
+    const results = await Promise.all(
+      dataEntries.map(async (data) => {
+        try {
+          const dataSummaryResult = await generateDataSummary({sensorData: data});
+          const isThreatening = dataSummaryResult.summary.toLowerCase().includes('threatening');
+          const isSuitable = !isThreatening;
+          let improvements = null;
 
-      if (isThreatening) {
-        const improvementsResult = await suggestImprovements({
-          sensorData,
-          threateningFactors: dataSummaryResult.summary,
-        });
-        setImprovements(improvementsResult.suggestedActions);
-      }
-    } catch (error: any) {
-      console.error('Error analyzing data:', error);
-      setSummary(`Error analyzing data: ${error.message}`);
-      setIsSuitable(null);
-    } finally {
-      setIsLoading(false);
-    }
+          if (isThreatening) {
+            const improvementsResult = await suggestImprovements({
+              sensorData: data,
+              threateningFactors: dataSummaryResult.summary,
+            });
+            improvements = improvementsResult.suggestedActions;
+          }
+
+          return {
+            data: data,
+            summary: dataSummaryResult.summary,
+            improvements: improvements,
+            isSuitable: isSuitable,
+          };
+        } catch (error: any) {
+          console.error('Error analyzing data:', error);
+          return {
+            data: data,
+            summary: `Error analyzing data: ${error.message}`,
+            improvements: null,
+            isSuitable: null,
+          };
+        }
+      })
+    );
+
+    setAnalysisResults(results);
+    setIsLoading(false);
   };
 
   return (
@@ -56,12 +70,13 @@ export default function Home() {
           <CardHeader>
             <CardTitle className="text-2xl">CoralSafe: Sensor Data Analyzer</CardTitle>
             <CardDescription>
-              Upload sensor data to analyze the suitability of the marine environment for coral growth.
+              Enter sensor data for multiple reef locations, separated by newlines, to analyze coral growth
+              suitability.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Textarea
-              placeholder="Enter sensor data (e.g., CSV format)"
+              placeholder="Enter sensor data (e.g., CSV format), separate each entry with a new line"
               rows={4}
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
@@ -72,41 +87,46 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {summary && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analysis Result</CardTitle>
-              <CardDescription>Here's the analysis of the provided sensor data.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>Suitability</AlertTitle>
-                <AlertDescription>
-                  {isSuitable === null ? (
-                    'Analyzing...'
-                  ) : isSuitable ? (
-                    <Badge variant="outline" className="bg-green-500 text-white">Suitable</Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-red-500 text-white">Threatening</Badge>
-                  )}
-                </AlertDescription>
-              </Alert>
+        {analysisResults.length > 0 &&
+          analysisResults.map((result, index) => (
+            <Card key={index} className="mb-4">
+              <CardHeader>
+                <CardTitle>Analysis Result for Reef Location {index + 1}</CardTitle>
+                <CardDescription>Analysis of the provided sensor data.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Suitability</AlertTitle>
+                  <AlertDescription>
+                    {result.isSuitable === null ? (
+                      'Analyzing...'
+                    ) : result.isSuitable ? (
+                      <Badge variant="outline" className="bg-green-500 text-white">
+                        Suitable
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-red-500 text-white">
+                        Threatening
+                      </Badge>
+                    )}
+                  </AlertDescription>
+                </Alert>
 
-              <div>
-                <h3 className="text-lg font-semibold">Summary:</h3>
-                <p>{summary}</p>
-              </div>
-
-              {improvements && (
                 <div>
-                  <h3 className="text-lg font-semibold">Suggested Improvements:</h3>
-                  <p>{improvements}</p>
+                  <h3 className="text-lg font-semibold">Summary:</h3>
+                  <p>{result.summary}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+
+                {result.improvements && (
+                  <div>
+                    <h3 className="text-lg font-semibold">Suggested Improvements:</h3>
+                    <p>{result.improvements}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
       </div>
     </div>
   );
