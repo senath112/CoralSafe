@@ -65,7 +65,7 @@ async function retryRequest<T>(fn: () => Promise<T>, maxRetries = 3, delay = 100
 
 export default function Home() {
   const [sensorData, setSensorData] = useState('');
-  const [threshold, setThreshold] = useState(10); // Default threshold value
+  const threshold = 10; // Default threshold value
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -250,16 +250,6 @@ export default function Home() {
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
             />
-            <div className="flex items-center space-x-4">
-              <Input
-                type="number"
-                placeholder="Threshold"
-                value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
-                className="w-24"
-              />
-              <p>Set threshold for suitability analysis</p>
-            </div>
             <Button onClick={analyzeData} disabled={isLoading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
@@ -375,7 +365,7 @@ export default function Home() {
               {['waterTemperature', 'salinity', 'pHLevel', 'dissolvedOxygen', 'turbidity', 'nitrate'].map((parameter) => {
                 const futureValues = predictFutureData(chartData, parameter as keyof ChartData);
                 const dataForChart = [...chartData.map(item => ({ time: item.time, value: item[parameter] })),
-                  ...futureValues.map((value, index) => ({ time: `+${index + 1}`, value: value }))];
+                  ...futureValues.map((value, index) => ({ time: `P${index + 1}`, value: value }))];
 
                 const displayParameter = parameter
                   .replace(/([A-Z])/g, ' $1')
