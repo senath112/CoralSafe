@@ -208,32 +208,32 @@ export default function Home() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Water Temperature</TableHead>
-                    <TableHead>Salinity</TableHead>
-                    <TableHead>pH Level</TableHead>
-                    <TableHead>Dissolved Oxygen</TableHead>
-                    <TableHead>Turbidity</TableHead>
-                    <TableHead>Nitrate</TableHead>
-                    <TableHead>Summary</TableHead>
-                    <TableHead>Suitability</TableHead>
-                    <TableHead>Improvements</TableHead>
+                    <TableHead className="border">Time</TableHead>
+                    <TableHead className="border">Location</TableHead>
+                    <TableHead className="border">Water Temperature</TableHead>
+                    <TableHead className="border">Salinity</TableHead>
+                    <TableHead className="border">pH Level</TableHead>
+                    <TableHead className="border">Dissolved Oxygen</TableHead>
+                    <TableHead className="border">Turbidity</TableHead>
+                    <TableHead className="border">Nitrate</TableHead>
+                    <TableHead className="border">Summary</TableHead>
+                    <TableHead className="border">Suitability</TableHead>
+                    <TableHead className="border">Improvements</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => (
                     <TableRow key={index}>
-                      <TableCell>{result.time}</TableCell>
-                      <TableCell>{result.location}</TableCell>
-                      <TableCell>{result.data.split(',')[0]}</TableCell>
-                      <TableCell>{result.data.split(',')[1]}</TableCell>
-                      <TableCell>{result.data.split(',')[2]}</TableCell>
-                      <TableCell>{result.data.split(',')[3]}</TableCell>
-                      <TableCell>{result.data.split(',')[4]}</TableCell>
-                      <TableCell>{result.data.split(',')[5]}</TableCell>
-                      <TableCell>{result.summary}</TableCell>
-                      <TableCell>
+                      <TableCell className="border">{result.time}</TableCell>
+                      <TableCell className="border">{result.location}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[0]}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[1]}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[2]}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[3]}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[4]}</TableCell>
+                      <TableCell className="border">{result.data.split(',')[5]}</TableCell>
+                      <TableCell className="border">{result.summary}</TableCell>
+                      <TableCell className="border">
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
@@ -246,7 +246,7 @@ export default function Home() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="border">
                         {result.improvements ? (
                           <Accordion type="single" collapsible>
                             <AccordionItem value={`item-${index}`}>
