@@ -4,12 +4,13 @@ import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {generateDataSummary} from '@/ai/flows/generate-data-summary';
-import {suggestImprovements} from '@/ai/flows/suggest-improvements';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
-import {Input} from '@/components/ui/input';
-import {Table, TableBody, TableCaption, TableHead, TableHeader, TableRow, TableCell} from '@/components/ui/table';
+import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import {Progress} from "@/components/ui/progress";
+import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
+import Image from 'next/image';
+import * as tf from '@tensorflow/tfjs';
 import {
   Chart,
   Line,
@@ -18,12 +19,10 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  CartesianGrid,
+  Brush,
+  Legend,
 } from 'recharts';
-import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
-import {Progress} from "@/components/ui/progress";
-import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
-import Image from 'next/image';
-import * as tf from '@tensorflow/tfjs';
 
 interface AnalysisResult {
   location: string;
@@ -39,30 +38,6 @@ interface AnalysisResult {
   isSuitable: boolean | null;
 }
 
-interface ChartData {
-  time: string;
-  waterTemperature: number | null;
-  salinity: number | null;
-  pHLevel: number | null;
-  dissolvedOxygen: number | null;
-  turbidity: number | null;
-  nitrate: number | null;
-}
-
-// Function to handle retries with exponential backoff
-async function retryRequest<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
-  try {
-    return await fn();
-  } catch (error: any) {
-    if (maxRetries > 0 && error.message.includes('429 Too Many Requests')) {
-      console.log(`Retrying after ${delay}ms. Retries left: ${maxRetries}`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return retryRequest(fn, maxRetries - 1, delay * 2);
-    }
-    throw error;
-  }
-}
-
 interface SensorData {
   time: string;
   location: string;
@@ -72,6 +47,17 @@ interface SensorData {
   dissolvedOxygen: number;
   turbidity: number;
   nitrate: number;
+}
+
+interface ChartData {
+  time: string;
+  waterTemperature: number | null;
+  salinity: number | null;
+  pHLevel: number | null;
+  dissolvedOxygen: number | null;
+  turbidity: number | null;
+  nitrate: number | null;
+  isPrediction?: boolean;
 }
 
 // Define thresholds for environmental parameters
@@ -166,12 +152,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [waterTemperatureChartData, setWaterTemperatureChartData] = useState<ChartData[]>([]);
-  const [salinityChartData, setSalinityChartData] = useState<ChartData[]>([]);
-  const [pHLevelChartData, setPHLevelChartData] = useState<ChartData[]>([]);
-  const [dissolvedOxygenChartData, setDissolvedOxygenChartData] = useState<ChartData[]>([]);
-  const [turbidityChartData, setTurbidityChartData] = useState<ChartData[]>([]);
-  const [nitrateChartData, setNitrateChartData] = useState<ChartData[]>([]);
+  const [allChartData, setAllChartData] = useState<ChartData[]>([]);
 
   const parseData = (data: string): SensorData[] => {
     return data.split('\n')
@@ -205,12 +186,7 @@ export default function Home() {
     setAnalysisResults([]);
     setOverallSuitability(null);
     setErrorMessage(null);
-    setWaterTemperatureChartData([]);
-    setSalinityChartData([]);
-    setPHLevelChartData([]);
-    setDissolvedOxygenChartData([]);
-    setTurbidityChartData([]);
-    setNitrateChartData([]);
+    setAllChartData([]);
 
     const parsedData = parseData(sensorData);
     const totalEntries = parsedData.length;
@@ -245,7 +221,7 @@ export default function Home() {
       const allSuitable = results.every(result => result.isSuitable === true);
       setOverallSuitability(allSuitable);
 
-      // Prepare chart data
+      // Prepare initial chart data
       const initialChartData = parsedData.map(result => ({
         time: result.time,
         waterTemperature: result.waterTemperature,
@@ -292,16 +268,13 @@ export default function Home() {
             dissolvedOxygen: predictedValues[3],
             turbidity: predictedValues[4],
             nitrate: predictedValues[5],
+            isPrediction: true, // Mark as prediction
           });
         }
 
-        // Combine historical data with predicted data for each parameter
-        setWaterTemperatureChartData([...limitedInitialChartData.map(item => ({ time: item.time, waterTemperature: item.waterTemperature })), ...predictedChartData.map(item => ({ time: item.time, waterTemperature: item.waterTemperature }))].slice(-100));
-        setSalinityChartData([...limitedInitialChartData.map(item => ({ time: item.time, salinity: item.salinity })), ...predictedChartData.map(item => ({ time: item.time, salinity: item.salinity }))].slice(-100));
-        setPHLevelChartData([...limitedInitialChartData.map(item => ({ time: item.time, pHLevel: item.pHLevel })), ...predictedChartData.map(item => ({ time: item.time, pHLevel: item.pHLevel }))].slice(-100));
-        setDissolvedOxygenChartData([...limitedInitialChartData.map(item => ({ time: item.time, dissolvedOxygen: item.dissolvedOxygen })), ...predictedChartData.map(item => ({ time: item.time, dissolvedOxygen: item.dissolvedOxygen }))].slice(-100));
-        setTurbidityChartData([...limitedInitialChartData.map(item => ({ time: item.time, turbidity: item.turbidity })), ...predictedChartData.map(item => ({ time: item.time, turbidity: item.turbidity }))].slice(-100));
-        setNitrateChartData([...limitedInitialChartData.map(item => ({ time: item.time, nitrate: item.nitrate })), ...predictedChartData.map(item => ({ time: item.time, nitrate: item.nitrate }))].slice(-100));
+        // Combine historical data with predicted data for overall chart
+        const combinedChartData = [...limitedInitialChartData, ...predictedChartData];
+        setAllChartData(combinedChartData.slice(-100));
       }
     } catch (error: any) {
       console.error('Error analyzing data:', error);
@@ -331,7 +304,7 @@ export default function Home() {
             </CardTitle>
             <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
-              Use a comma-separated format: Date, Location, Water_Temperature_C, Salinity_PSU, pH_Level, Dissolved_Oxygen_mg_L, Turbidity_NTU, Nitrate_mg_L.
+              Use a comma-separated format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -385,7 +358,7 @@ export default function Home() {
                     <TableRow key={index}>
                       <TableCell className="py-2">{result.time}</TableCell>
                       <TableCell className="py-2">{result.location}</TableCell>
-                       <TableCell className="py-2">
+                      <TableCell className="py-2">
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
@@ -405,7 +378,7 @@ export default function Home() {
                       <TableCell className="py-2">{result.turbidity}</TableCell>
                       <TableCell className="py-2">{result.nitrate}</TableCell>
                       <TableCell className="py-2">
-                      {result.summary ? (
+                        {result.summary ? (
                           <Accordion type="single" collapsible>
                             <AccordionItem value={`item-summary-${index}`}>
                               <AccordionTrigger>
@@ -438,114 +411,29 @@ export default function Home() {
           </Card>
         )}
 
-        {waterTemperatureChartData.length > 0 && (
+        {allChartData.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Water Temperature Over Time</CardTitle>
-              <CardDescription>Trends of water temperature over time, including predictions.</CardDescription>
+              <CardTitle>Environmental Parameters Over Time</CardTitle>
+              <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={waterTemperatureChartData}>
+              <ResponsiveContainer width="100%" height={500}>
+                <LineChart data={allChartData}
+                           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="time" />
                   <YAxis />
                   <Tooltip />
+                  <Legend />
                   <Line type="monotone" dataKey="waterTemperature" stroke="#8884d8" name="Water Temperature" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {salinityChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Salinity Over Time</CardTitle>
-              <CardDescription>Trends of salinity over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salinityChartData}>
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
                   <Line type="monotone" dataKey="salinity" stroke="#82ca9d" name="Salinity" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {pHLevelChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>pH Level Over Time</CardTitle>
-              <CardDescription>Trends of pH level over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={pHLevelChartData}>
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
                   <Line type="monotone" dataKey="pHLevel" stroke="#ffc658" name="pH Level" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {dissolvedOxygenChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Dissolved Oxygen Over Time</CardTitle>
-              <CardDescription>Trends of dissolved oxygen over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dissolvedOxygenChartData}>
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
                   <Line type="monotone" dataKey="dissolvedOxygen" stroke="#a4de6c" name="Dissolved Oxygen" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {turbidityChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Turbidity Over Time</CardTitle>
-              <CardDescription>Trends of turbidity over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={turbidityChartData}>
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
                   <Line type="monotone" dataKey="turbidity" stroke="#d0ed57" name="Turbidity" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {nitrateChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Nitrate Over Time</CardTitle>
-              <CardDescription>Trends of nitrate over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={nitrateChartData}>
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
                   <Line type="monotone" dataKey="nitrate" stroke="#ff7300" name="Nitrate" />
+                  <Brush dataKey="time" stroke="#8884d8" />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
