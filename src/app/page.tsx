@@ -23,6 +23,16 @@ import {
   Brush,
   Legend,
 } from 'recharts';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from "@/components/ui/table"
 
 interface AnalysisResult {
   location: string;
@@ -153,6 +163,12 @@ export default function Home() {
   const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [allChartData, setAllChartData] = useState<ChartData[]>([]);
+  const [temperatureChartData, setTemperatureChartData] = useState<ChartData[]>([]);
+  const [salinityChartData, setSalinityChartData] = useState<ChartData[]>([]);
+  const [pHChartData, setPHChartData] = useState<ChartData[]>([]);
+  const [oxygenChartData, setOxygenChartData] = useState<ChartData[]>([]);
+  const [turbidityChartData, setTurbidityChartData] = useState<ChartData[]>([]);
+  const [nitrateChartData, setNitrateChartData] = useState<ChartData[]>([]);
 
   const parseData = (data: string): SensorData[] => {
     return data.split('\n')
@@ -187,6 +203,12 @@ export default function Home() {
     setOverallSuitability(null);
     setErrorMessage(null);
     setAllChartData([]);
+    setTemperatureChartData([]);
+    setSalinityChartData([]);
+    setPHChartData([]);
+    setOxygenChartData([]);
+    setTurbidityChartData([]);
+    setNitrateChartData([]);
 
     const parsedData = parseData(sensorData);
     const totalEntries = parsedData.length;
@@ -275,6 +297,31 @@ export default function Home() {
         // Combine historical data with predicted data for overall chart
         const combinedChartData = [...limitedInitialChartData, ...predictedChartData];
         setAllChartData(combinedChartData.slice(-100));
+
+        // Prepare data for individual charts
+        const temperatureData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.waterTemperature})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.waterTemperature, isPrediction: true}))];
+        setTemperatureChartData(temperatureData.slice(-100));
+
+        const salinityData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.salinity})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.salinity, isPrediction: true}))];
+        setSalinityChartData(salinityData.slice(-100));
+
+        const pHData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.pHLevel})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.pHLevel, isPrediction: true}))];
+        setPHChartData(pHData.slice(-100));
+
+        const oxygenData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.dissolvedOxygen})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.dissolvedOxygen, isPrediction: true}))];
+        setOxygenChartData(oxygenData.slice(-100));
+
+        const turbidityData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.turbidity})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.turbidity, isPrediction: true}))];
+        setTurbidityChartData(turbidityData.slice(-100));
+
+        const nitrateData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.nitrate})),
+          ...predictedChartData.map(item => ({time: item.time, value: item.nitrate, isPrediction: true}))];
+        setNitrateChartData(nitrateData.slice(-100));
       }
     } catch (error: any) {
       console.error('Error analyzing data:', error);
@@ -285,13 +332,35 @@ export default function Home() {
     }
   };
 
+  const renderChart = (data: ChartData[], dataKey: string, name: string, strokeColor: string) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>{name} Over Time</CardTitle>
+        <CardDescription>Trends of {name} over time, including predictions.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="time" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="value" stroke={strokeColor} name={name} />
+            <Brush dataKey="time" stroke={strokeColor} />
+          </LineChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
-      <div className="max-w-5xl w-full space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">
-              <div className="flex items-center">
+    
+      
+        
+          
+            
+              
                 <Image
                   src="https://picsum.photos/40/40"
                   alt="CoralSafe Logo"
@@ -300,16 +369,18 @@ export default function Home() {
                   className="mr-2 rounded-full"
                 />
                 CoralSafe: Sensor Data Analyzer
-              </div>
-            </CardTitle>
-            <CardDescription>
+              
+            
+            
               Enter sensor data for a reef location over multiple times, separated by newlines.
               Use a comma-separated format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>Sensor Data Input</div>
-            <div>Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</div>
+            
+          
+          
+            
+              Sensor Data Input
+            
+            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
               placeholder="Paste sensor data here"
               rows={4}
@@ -324,122 +395,147 @@ export default function Home() {
             )}
             {errorMessage && (
               <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{errorMessage}</AlertDescription>
+                
+                  Error
+                
+                {errorMessage}
               </Alert>
             )}
-          </CardContent>
-        </Card>
+          
+        
 
         {analysisResults.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analysis Results</CardTitle>
-              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table className="rounded-md shadow-md">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-left font-medium">Time</TableHead>
-                    <TableHead className="text-left font-medium">Location</TableHead>
-                    <TableHead className="text-left font-medium">Suitability</TableHead>
-                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
-                    <TableHead className="text-left font-medium">Salinity</TableHead>
-                    <TableHead className="text-left font-medium">pH Level</TableHead>
-                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
-                    <TableHead className="text-left font-medium">Turbidity</TableHead>
-                    <TableHead className="text-left font-medium">Nitrate</TableHead>
-                    <TableHead className="text-left font-medium">Summary</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+          
+            
+              
+                Analysis Results
+              
+              Detailed analysis of sensor data for the location over time.
+            
+            
+              
+                
+                  
+                    
+                      Time
+                    
+                    
+                      Location
+                    
+                    
+                      Suitability
+                    
+                    
+                      Water Temperature
+                    
+                    
+                      Salinity
+                    
+                    
+                      pH Level
+                    
+                    
+                      Dissolved Oxygen
+                    
+                    
+                      Turbidity
+                    
+                    
+                      Nitrate
+                    
+                    
+                      Summary
+                    
+                  
+                
+                
                   {analysisResults.map((result, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="py-2">{result.time}</TableCell>
-                      <TableCell className="py-2">{result.location}</TableCell>
-                      <TableCell className="py-2">
+                    
+                      
+                        {result.time}
+                      
+                      
+                        {result.location}
+                      
+                       
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
-                          <Badge variant="outline" className="bg-green-500 text-white">
+                          
                             Suitable
-                          </Badge>
+                          
                         ) : (
-                          <Badge variant="outline" className="bg-red-500 text-white">
+                          
                             Threatening
-                          </Badge>
+                          
                         )}
-                      </TableCell>
-                      <TableCell className="py-2">{result.waterTemperature}</TableCell>
-                      <TableCell className="py-2">{result.salinity}</TableCell>
-                      <TableCell className="py-2">{result.pHLevel}</TableCell>
-                      <TableCell className="py-2">{result.dissolvedOxygen}</TableCell>
-                      <TableCell className="py-2">{result.turbidity}</TableCell>
-                      <TableCell className="py-2">{result.nitrate}</TableCell>
-                      <TableCell className="py-2">
+                      
+                      
+                        {result.waterTemperature}
+                      
+                      
+                        {result.salinity}
+                      
+                      
+                        {result.pHLevel}
+                      
+                      
+                        {result.dissolvedOxygen}
+                      
+                      
+                        {result.turbidity}
+                      
+                      
+                        {result.nitrate}
+                      
+                       
                         {result.summary ? (
-                          <Accordion type="single" collapsible>
-                            <AccordionItem value={`item-summary-${index}`}>
-                              <AccordionTrigger>
+                          
+                            
+                              
                                 View Summary
-                              </AccordionTrigger>
-                              <AccordionContent>
+                              
+                              
                                 {result.summary}
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
+                              
+                            
+                          
                         ) : (
                           'N/A'
                         )}
-                      </TableCell>
-                    </TableRow>
+                      
+                    
                   ))}
-                </TableBody>
-              </Table>
+                
+              
               {overallSuitability !== null && (
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold">Overall Suitability:</h3>
+                
+                  
+                    Overall Suitability:
+                  
                   {overallSuitability ? (
-                    <Badge variant="outline" className="bg-green-500 text-white">Suitable</Badge>
+                    
+                      Suitable
+                    
                   ) : (
-                    <Badge variant="outline" className="bg-red-500 text-white">Threatening</Badge>
+                    
+                      Threatening
+                    
                   )}
-                </div>
+                
               )}
-            </CardContent>
-          </Card>
+            
+          
         )}
-
-        {allChartData.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Environmental Parameters Over Time</CardTitle>
-              <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={500}>
-                <LineChart data={allChartData}
-                           margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="waterTemperature" stroke="#8884d8" name="Water Temperature" />
-                  <Line type="monotone" dataKey="salinity" stroke="#82ca9d" name="Salinity" />
-                  <Line type="monotone" dataKey="pHLevel" stroke="#ffc658" name="pH Level" />
-                  <Line type="monotone" dataKey="dissolvedOxygen" stroke="#a4de6c" name="Dissolved Oxygen" />
-                  <Line type="monotone" dataKey="turbidity" stroke="#d0ed57" name="Turbidity" />
-                  <Line type="monotone" dataKey="nitrate" stroke="#ff7300" name="Nitrate" />
-                  <Brush dataKey="time" stroke="#8884d8" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
+        {renderChart(temperatureChartData, 'waterTemperature', 'Water Temperature', '#8884d8')}
+        {renderChart(salinityChartData, 'salinity', 'Salinity', '#82ca9d')}
+        {renderChart(pHChartData, 'pHLevel', 'pH Level', '#ffc658')}
+        {renderChart(oxygenChartData, 'dissolvedOxygen', 'Dissolved Oxygen', '#a4de6c')}
+        {renderChart(turbidityChartData, 'turbidity', 'Turbidity', '#d0ed57')}
+        {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
+      
+    
   );
 }
+
+
