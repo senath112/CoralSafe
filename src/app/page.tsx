@@ -355,12 +355,12 @@ export default function Home() {
   );
 
   return (
-    
-      
-        
-          
-            
-              
+    <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
+      <div className="max-w-5xl w-full space-y-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <div className="flex items-center">
                 <Image
                   src="https://picsum.photos/40/40"
                   alt="CoralSafe Logo"
@@ -369,17 +369,15 @@ export default function Home() {
                   className="mr-2 rounded-full"
                 />
                 {"CoralSafe: Sensor Data Analyzer"}
-              
-            
-            
+              </div>
+            </CardTitle>
+            <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
               Use a comma-separated format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L.
-            
-          
-          
-            
-              Sensor Data Input
-            
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div>Sensor Data Input</div>
             Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
               placeholder="Paste sensor data here"
@@ -395,137 +393,95 @@ export default function Home() {
             )}
             {errorMessage && (
               <Alert variant="destructive">
-                
-                  Error
-                
-                {errorMessage}
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             )}
-          
-        
+          </CardContent>
+        </Card>
 
         {analysisResults.length > 0 && (
-          
-            
-              
-                Analysis Results
-              
-              Detailed analysis of sensor data for the location over time.
-            
-            
-              
-                
-                  
-                    
-                      Time
-                    
-                    
-                      Location
-                    
-                    
-                      Suitability
-                    
-                    
-                      Water Temperature
-                    
-                    
-                      Salinity
-                    
-                    
-                      pH Level
-                    
-                    
-                      Dissolved Oxygen
-                    
-                    
-                      Turbidity
-                    
-                    
-                      Nitrate
-                    
-                    
-                      Summary
-                    
-                  
-                
-                
+          <Card>
+            <CardHeader>
+              <CardTitle>Analysis Results</CardTitle>
+              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table className="rounded-md shadow-md">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left font-medium">Time</TableHead>
+                    <TableHead className="text-left font-medium">Location</TableHead>
+                    <TableHead className="text-left font-medium">Suitability</TableHead>
+                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
+                    <TableHead className="text-left font-medium">Salinity</TableHead>
+                    <TableHead className="text-left font-medium">pH Level</TableHead>
+                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
+                    <TableHead className="text-left font-medium">Turbidity</TableHead>
+                    <TableHead className="text-left font-medium">Nitrate</TableHead>
+                    <TableHead className="text-left font-medium">Summary</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {analysisResults.map((result, index) => (
-                    
-                      
-                        {result.time}
-                      
-                      
-                        {result.location}
-                      
-                       
+                    <TableRow key={index}>
+                      <TableCell className="py-2">{result.time}</TableCell>
+                      <TableCell className="py-2">{result.location}</TableCell>
+                       <TableCell className="py-2">
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
-                          
+                          <Badge variant="outline">
                             Suitable
-                          
+                          </Badge>
                         ) : (
-                          
+                          <Badge variant="destructive">
                             Threatening
-                          
+                          </Badge>
                         )}
-                      
-                      
-                        {result.waterTemperature}
-                      
-                      
-                        {result.salinity}
-                      
-                      
-                        {result.pHLevel}
-                      
-                      
-                        {result.dissolvedOxygen}
-                      
-                      
-                        {result.turbidity}
-                      
-                      
-                        {result.nitrate}
-                      
-                       
+                      </TableCell>
+                      <TableCell className="py-2">{result.waterTemperature}</TableCell>
+                      <TableCell className="py-2">{result.salinity}</TableCell>
+                      <TableCell className="py-2">{result.pHLevel}</TableCell>
+                      <TableCell className="py-2">{result.dissolvedOxygen}</TableCell>
+                      <TableCell className="py-2">{result.turbidity}</TableCell>
+                      <TableCell className="py-2">{result.nitrate}</TableCell>
+                       <TableCell className="py-2">
                         {result.summary ? (
-                          
-                            
-                              
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value={`summary-${index}`}>
+                              <AccordionTrigger>
                                 View Summary
-                              
-                              
+                              </AccordionTrigger>
+                              <AccordionContent>
                                 {result.summary}
-                              
-                            
-                          
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
                         ) : (
                           'N/A'
                         )}
-                      
-                    
+                      </TableCell>
+                    </TableRow>
                   ))}
-                
-              
+                </TableBody>
+              </Table>
               {overallSuitability !== null && (
-                
-                  
-                    Overall Suitability:
-                  
+                <div>
+                  Overall Suitability:
                   {overallSuitability ? (
-                    
+                    <Badge variant="outline">
                       Suitable
-                    
+                    </Badge>
                   ) : (
-                    
+                    <Badge variant="destructive">
                       Threatening
-                    
+                    </Badge>
                   )}
-                
+                </div>
               )}
-            
-          
+            </CardContent>
+          </Card>
         )}
         {renderChart(temperatureChartData, 'waterTemperature', 'Water Temperature', '#8884d8')}
         {renderChart(salinityChartData, 'salinity', 'Salinity', '#82ca9d')}
@@ -533,7 +489,32 @@ export default function Home() {
         {renderChart(oxygenChartData, 'dissolvedOxygen', 'Dissolved Oxygen', '#a4de6c')}
         {renderChart(turbidityChartData, 'turbidity', 'Turbidity', '#d0ed57')}
         {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
-      
-    
+              <Card>
+        <CardHeader>
+          <CardTitle>All Parameters Over Time</CardTitle>
+          <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={500}>
+            <LineChart data={allChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="waterTemperature" stroke="#8884d8" name="Water Temperature" />
+              <Line type="monotone" dataKey="salinity" stroke="#82ca9d" name="Salinity" />
+              <Line type="monotone" dataKey="pHLevel" stroke="#ffc658" name="pH Level" />
+              <Line type="monotone" dataKey="dissolvedOxygen" stroke="#a4de6c" name="Dissolved Oxygen" />
+              <Line type="monotone" dataKey="turbidity" stroke="#d0ed57" name="Turbidity" />
+              <Line type="monotone" dataKey="nitrate" stroke="#ff7300" name="Nitrate" />
+              <Brush dataKey="time" stroke="#8884d8" />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+      </div>
+    </div>
   );
 }
+
