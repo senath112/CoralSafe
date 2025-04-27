@@ -332,7 +332,7 @@ export default function Home() {
     }
   };
 
-  const renderChart = (data: ChartData[], dataKey: string, name: string, strokeColor: string) => (
+  const renderChart = (data: any[], dataKey: string, name: string, strokeColor: string) => (
     <Card>
       <CardHeader>
         <CardTitle>{name} Over Time</CardTitle>
@@ -360,7 +360,7 @@ export default function Home() {
         <Card>
           <CardHeader>
             <CardTitle>
-              
+              <div className="flex items-center">
                 <Image
                   src="https://picsum.photos/40/40"
                   alt="CoralSafe Logo"
@@ -369,7 +369,7 @@ export default function Home() {
                   className="mr-2 rounded-full"
                 />
                 CoralSafe: Sensor Data Analyzer
-              
+              </div>
             </CardTitle>
             <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
@@ -377,9 +377,7 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            
-              Sensor Data Input
-            
+            <div>Sensor Data Input</div>
             Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
               placeholder="Paste sensor data here"
@@ -395,9 +393,7 @@ export default function Home() {
             )}
             {errorMessage && (
               <Alert variant="destructive">
-                
-                  Error
-                
+                <AlertTitle>Error</AlertTitle>
                 {errorMessage}
               </Alert>
             )}
@@ -407,10 +403,8 @@ export default function Home() {
         {analysisResults.length > 0 && (
           <Card>
             <CardHeader>
-              
-                Analysis Results
-              
-              Detailed analysis of sensor data for the location over time.
+              <CardTitle>Analysis Results</CardTitle>
+              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="rounded-md shadow-md">
@@ -473,7 +467,7 @@ export default function Home() {
                 </TableBody>
               </Table>
               {overallSuitability !== null && (
-                
+                <div>
                   Overall Suitability:
                   {overallSuitability ? (
                     <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }}>
@@ -484,7 +478,7 @@ export default function Home() {
                       Threatening
                     </Badge>
                   )}
-                
+                </div>
               )}
             </CardContent>
           </Card>
@@ -497,10 +491,8 @@ export default function Home() {
         {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
               <Card>
         <CardHeader>
-          
-            All Parameters Over Time
-          
-          Trends of all parameters over time, including predictions.
+          <CardTitle>All Parameters Over Time</CardTitle>
+          <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={500}>
