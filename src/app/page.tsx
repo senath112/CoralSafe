@@ -360,7 +360,7 @@ export default function Home() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <div className="flex items-center">
+              
                 <Image
                   src="https://picsum.photos/40/40"
                   alt="CoralSafe Logo"
@@ -368,8 +368,8 @@ export default function Home() {
                   height={40}
                   className="mr-2 rounded-full"
                 />
-                {"CoralSafe: Sensor Data Analyzer"}
-              </div>
+                CoralSafe: Sensor Data Analyzer
+              
             </CardTitle>
             <CardDescription>
               Enter sensor data for a reef location over multiple times, separated by newlines.
@@ -377,7 +377,9 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div>Sensor Data Input</div>
+            
+              Sensor Data Input
+            
             Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
             <Textarea
               placeholder="Paste sensor data here"
@@ -393,8 +395,10 @@ export default function Home() {
             )}
             {errorMessage && (
               <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{errorMessage}</AlertDescription>
+                
+                  Error
+                
+                {errorMessage}
               </Alert>
             )}
           </CardContent>
@@ -403,8 +407,10 @@ export default function Home() {
         {analysisResults.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Analysis Results</CardTitle>
-              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
+              
+                Analysis Results
+              
+              Detailed analysis of sensor data for the location over time.
             </CardHeader>
             <CardContent>
               <Table className="rounded-md shadow-md">
@@ -431,7 +437,7 @@ export default function Home() {
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
-                          <Badge variant="outline">
+                          <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }}>
                             Suitable
                           </Badge>
                         ) : (
@@ -467,10 +473,10 @@ export default function Home() {
                 </TableBody>
               </Table>
               {overallSuitability !== null && (
-                <div>
+                
                   Overall Suitability:
                   {overallSuitability ? (
-                    <Badge variant="outline">
+                    <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }}>
                       Suitable
                     </Badge>
                   ) : (
@@ -478,7 +484,7 @@ export default function Home() {
                       Threatening
                     </Badge>
                   )}
-                </div>
+                
               )}
             </CardContent>
           </Card>
@@ -491,8 +497,10 @@ export default function Home() {
         {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
               <Card>
         <CardHeader>
-          <CardTitle>All Parameters Over Time</CardTitle>
-          <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
+          
+            All Parameters Over Time
+          
+          Trends of all parameters over time, including predictions.
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={500}>
@@ -517,4 +525,3 @@ export default function Home() {
     </div>
   );
 }
-
