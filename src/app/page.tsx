@@ -368,7 +368,7 @@ export default function Home() {
                   height={40}
                   className="mr-2 rounded-full"
                 />
-                CoralSafe: Sensor Data Analyzer
+                {"CoralSafe: Sensor Data Analyzer"}
               
             
             
@@ -537,5 +537,3 @@ export default function Home() {
     
   );
 }
-
-
