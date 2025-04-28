@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import {useState, useCallback, useRef, useEffect} from 'react';
-import {Button} from '@/components/ui/button';
-import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableHeader,
@@ -13,13 +13,13 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table';
-import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {Progress} from "@/components/ui/progress";
-import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
-import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Progress } from "@/components/ui/progress";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
-import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent} from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 
 interface AnalysisResult {
   time: string;
@@ -38,7 +38,7 @@ interface AnalysisResult {
   pHLevelStatus: 'ideal' | 'concerning' | 'acidification';
   dissolvedOxygenStatus: 'ideal' | 'warning' | 'hypoxia';
   turbidityStatus: 'ideal' | 'reducedLight' | 'stressed';
-  nitrateStatus: 'ideal' | 'manageable' | 'suffocating';
+  nitrateStatus: 'ideal' | 'ideal' | 'manageable' | 'suffocating';
 }
 
 const THEME_CONFIG = {
@@ -408,186 +408,178 @@ export default function Home() {
   const thresholds = defineSensorDataThresholds();
 
   return (
-    
-      
-        
-          
-            
+    <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
+      <div className="max-w-5xl w-full space-y-8">
+        <Card className="bg-card shadow-md rounded-md">
+          <CardHeader>
+            <div className="flex items-center space-x-4">
               <Avatar>
-                <AvatarImage 
-                  src="https://picsum.photos/50/50" 
-                  alt="CoralSafe Logo" 
-                  className="mr-2 rounded-full" 
+                <AvatarImage
+                  src="https://picsum.photos/50/50"
+                  alt="CoralSafe Logo"
+                  className="mr-2 rounded-full"
                 />
                 <AvatarFallback>CS</AvatarFallback>
               </Avatar>
-              <span>CoralSafe: Sensor Data Analyzer</span>
-            
-          
-          
+              CoralSafe: Sensor Data Analyzer
+            </div>
+          </CardHeader>
+          <CardContent>
             Sensor Data Input
-          
-          
-            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
-          
-        
-        
-          
+            <div>Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</div>
             <Textarea
               placeholder="Paste sensor data here"
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
             />
-          
-        
-        
-          
- Analyze Sensor Data
-          
-          {isLoading && (
-            
-              Analyzing Data... {analysisProgress.toFixed(2)}%
-            
-          )}
-        
-      
-      
+            <Button onClick={analyzeData} disabled={isLoading}>
+              Analyze Sensor Data
+            </Button>
+            {isLoading && (
+              <Alert variant="default">
+                <AlertTitle>Analyzing Data...</AlertTitle>
+                <AlertDescription>
+                  Progress: {analysisProgress.toFixed(2)}%
+                  <Progress value={analysisProgress} />
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
         {analysisResults.length > 0 && (
-          
-            
-              
-Analysis Results
-              
+          <Card className="bg-card shadow-md rounded-md">
+            <CardHeader>
+              <CardTitle>Analysis Results</CardTitle>
+              <CardDescription>
                 This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
-              
-            
-            
-              
-                
-                  
-                    Time
-                    Location
-                    Suitability
-                    Water Temperature
-                    Salinity
-                    pH Level
-                    Dissolved Oxygen
-                    Turbidity
-                    Nitrate
-                    Improvements
-                  
-                
-                
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table className="rounded-md shadow-md">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left font-medium">Time</TableHead>
+                    <TableHead className="text-left font-medium">Location</TableHead>
+                    <TableHead className="text-left font-medium">Suitability</TableHead>
+                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
+                    <TableHead className="text-left font-medium">Salinity</TableHead>
+                    <TableHead className="text-left font-medium">pH Level</TableHead>
+                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
+                    <TableHead className="text-left font-medium">Turbidity</TableHead>
+                    <TableHead className="text-left font-medium">Nitrate</TableHead>
+                    <TableHead className="text-left font-medium">Improvements</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {analysisResults.map((result, index) => (
-                    
-                      
-                        {result.time}
-                        {result.location}
-                        
-                          {result.isSuitable === null ? (
-                            
-                              Analyzing...
-                            
-                          ) : result.isSuitable ? (
-                            
-                              Suitable
-                            
-                          ) : (
-                            
-                              Threatening
-                            
-                          )}
-                        
-                        
-                          {result.waterTemperature}
-                        
-                        
-                          {result.salinity}
-                        
-                        
-                          {result.pHLevel}
-                        
-                        
-                          {result.dissolvedOxygen}
-                        
-                        
-                          {result.turbidity}
-                        
-                        
-                          {result.nitrate}
-                        
-                        
- Threatening Factors and Suggested Actions
-                          
-                            
-                              
-                                <strong>Threatening Factors:</strong> {result.threateningFactors}
-                              
-                              
-                                <strong>Suggested Actions:</strong> {result.suggestedActions}
-                              
-                            
-                          
-                        
-                      
-                    
+                    <TableRow key={index}>
+                      <TableCell className="py-2">{result.time}</TableCell>
+                      <TableCell className="py-2">{result.location}</TableCell>
+                      <TableCell className="py-2">
+                        {result.isSuitable === null ? (
+                          <div className="text-gray-500">Analyzing...</div>
+                        ) : result.isSuitable ? (
+                          <div className="text-green-500">Suitable</div>
+                        ) : (
+                          <div className="text-red-500">Threatening</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.waterTemperature}
+                        <span className={PARAMETER_STATUS_MAP.waterTemperature[result.waterTemperatureStatus as keyof typeof PARAMETER_STATUS_MAP.waterTemperature]}>
+                          {result.waterTemperatureStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.salinity}
+                        <span className={PARAMETER_STATUS_MAP.salinity[result.salinityStatus as keyof typeof PARAMETER_STATUS_MAP.salinity]}>
+                          {result.salinityStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.pHLevel}
+                        <span className={PARAMETER_STATUS_MAP.pHLevel[result.pHLevelStatus as keyof typeof PARAMETER_STATUS_MAP.pHLevel]}>
+                          {result.pHLevelStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.dissolvedOxygen}
+                        <span className={PARAMETER_STATUS_MAP.dissolvedOxygen[result.dissolvedOxygenStatus as keyof typeof PARAMETER_STATUS_MAP.dissolvedOxygen]}>
+                          {result.dissolvedOxygenStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.turbidity}
+                        <span className={PARAMETER_STATUS_MAP.turbidity[result.turbidityStatus as keyof typeof PARAMETER_STATUS_MAP.turbidity]}>
+                          {result.turbidityStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {result.nitrate}
+                        <span className={PARAMETER_STATUS_MAP.nitrate[result.nitrateStatus as keyof typeof PARAMETER_STATUS_MAP.nitrate]}>
+                          {result.nitrateStatus}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <Accordion type="single" collapsible>
+                          <AccordionItem value={`threats-${index}`}>
+                            <AccordionTrigger>Threatening Factors and Suggested Actions</AccordionTrigger>
+                            <AccordionContent>
+                              <div>
+                                <div>
+                                  <strong>Threatening Factors:</strong> {result.threateningFactors}
+                                </div>
+                                <div>
+                                  <strong>Suggested Actions:</strong> {result.suggestedActions}
+                                </div>
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                
-              
-            
-          
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         )}
 
         {Object.keys(THEME_CONFIG).map((name) => (
-          
-            
-              
-                {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time
-              
-              
+          <Card key={name} className="bg-card shadow-md rounded-md">
+            <CardHeader>
+              <CardTitle>{THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time</CardTitle>
+              <CardDescription>
                 Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
-              
-            
-            
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               {analysisResults.length > 0 ? (
-                
-                  
-                    
-                      
-                        
-                      
-                      
-                        
-                      
-                      
-                        
-                      
-                      
-                        
-                      
-                      
-                        
-                      
-                      
-                        
-                      
-                      
-                        
-                      
-                    
-                  
-                
+                <ChartContainer config={THEME_CONFIG}>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={analysisResults}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip content={<ChartTooltipContent />} />
+                      <Legend content={<ChartLegendContent />} />
+                      <Line
+                        type="monotone"
+                        dataKey={name}
+                        stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
+                        name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
               ) : (
-                
-                  No data to display. Please input sensor data and analyze.
-                
+                <div>No data to display. Please input sensor data and analyze.</div>
               )}
-            
-          
+            </CardContent>
+          </Card>
         ))}
-      
-    
+      </div>
+    </div>
   );
 }
-
-
