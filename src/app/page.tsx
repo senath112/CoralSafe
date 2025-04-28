@@ -5,12 +5,11 @@ import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {defineSensorDataThresholds, analyzeSensorData, predictFutureReadings} from '@/lib/utils';
-import {Chart} from '@/components/Chart';
+import {defineSensorDataThresholds, analyzeSensorData} from '@/lib/utils';
+import {ChartContainer} from '@/components/Chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs';
-import {create} from 'domain';
 import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar";
 
 import {
@@ -80,7 +79,6 @@ const Home = () => {
       });
   }, []);
 
-  // Function to train the model
   const trainModel = async (data: SensorData[]) => {
     if (!tf) {
       console.error('TensorFlow.js is not available.');
@@ -120,16 +118,14 @@ const Home = () => {
   };
 
   const parseData = (data: string) => {
-    // Splitting by newline to separate entries
-    return data.split('\n').slice(1).map(entry => { // Skip the header row
+    return data.split('\n').slice(1).map(entry => {
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length < 8) {
-        return null; // Skip incomplete entries
+        return null;
       }
 
       const [time, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
 
-      // Check if all required values are non-empty
       if (!time || !location || !waterTemperature || !salinity || !pHLevel || !dissolvedOxygen || !turbidity || !nitrate) {
         return null;
       }
@@ -161,7 +157,6 @@ const Home = () => {
         return;
       }
 
-      // Train the model
       const trainedModel = await trainModel(parsedData);
       if (!trainedModel) {
         setError('Failed to train the model.');
@@ -171,10 +166,13 @@ const Home = () => {
       setModel(trainedModel);
 
       const newResults: AnalysisResult[] = [];
+      let allChartData = [...newResults];
+
       for (let i = 0; i < parsedData.length; i++) {
         const data = parsedData[i];
         const {isSuitable, summary, temperatureColor, salinityColor, phColor, oxygenColor, turbidityColor, nitrateColor, improvements} = analyzeSensorData(data, thresholds);
-        newResults.push({
+
+        const analysisResult: AnalysisResult = {
           time: data.time,
           location: data.location,
           waterTemperature: data.waterTemperature,
@@ -192,7 +190,10 @@ const Home = () => {
           oxygenColor,
           turbidityColor,
           nitrateColor,
-        });
+        };
+        newResults.push(analysisResult);
+        allChartData.push(analysisResult);
+
         setProgress((i + 1) / parsedData.length * 100);
         await new Promise(resolve => setTimeout(resolve, 10)); // brief pause
       }
@@ -201,11 +202,9 @@ const Home = () => {
       // Predict future data points using TensorFlow.js model
       if (trainedModel && parsedData.length > 0) {
         const numPredictions = 5;
-
         let lastRecord = parsedData[parsedData.length - 1];
-        const allChartData = [...newResults];
-        for (let i = 0; i < numPredictions; i++) {
 
+        for (let i = 0; i < numPredictions; i++) {
           const inputTensor = tf.tensor2d(
             [
               [
@@ -224,6 +223,7 @@ const Home = () => {
           const predictions = trainedModel.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
           const predictedValues = await predictions.data();
 
+          // Adding slight variations to the predicted values
           const predictedWaterTemperature = predictedValues[0] + (Math.random() - 0.5) * 0.1;
           const predictedSalinity = predictedValues[1] + (Math.random() - 0.5) * 0.1;
           const predictedPHLevel = predictedValues[2] + (Math.random() - 0.5) * 0.01;
@@ -242,6 +242,7 @@ const Home = () => {
             turbidity: predictedTurbidity,
             nitrate: predictedNitrate,
           };
+
           const {isSuitable: predictedIsSuitable, summary: predictedSummary, temperatureColor: predictedTemperatureColor, salinityColor: predictedSalinityColor, phColor: predictedPhColor, oxygenColor: predictedOxygenColor, turbidityColor: predictedTurbidityColor, nitrateColor: predictedNitrateColor, improvements: predictedImprovements} = analyzeSensorData(predictedData, thresholds);
 
           const predictedAnalysisResult: AnalysisResult = {
@@ -279,10 +280,9 @@ const Home = () => {
 
   const bubbles = Array.from({length: 20}, (_, i) => ({
     id: i,
-    size: Math.random() * 30 + 10, // Bubble size between 10px and 40px
-    // Ensure bubbles are distributed throughout the width
+    size: Math.random() * 30 + 10,
     left: Math.random() * 100 + '%',
-    animationDuration: Math.random() * 5 + 5 + 's', // Animation duration between 5s and 10s
+    animationDuration: Math.random() * 5 + 5 + 's',
   }));
 
   const fishImages = [
@@ -291,13 +291,11 @@ const Home = () => {
 
   const fishes = Array.from({length: 5}, (_, i) => ({
     id: i,
-    // Fish size
     width: Math.random() * 30 + 20,
     height: Math.random() * 15 + 10,
-    // Ensure fish are distributed throughout the width
     left: Math.random() * 100 + '%',
     top: Math.random() * 80 + 10 + '%',
-    animationDuration: Math.random() * 5 + 5 + 's', // Animation duration between 5s and 10s
+    animationDuration: Math.random() * 5 + 5 + 's',
     animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
     src: fishImages[Math.floor(Math.random() * fishImages.length)],
   }));
@@ -527,10 +525,37 @@ const Home = () => {
             
             
               {analysisResults.length > 0 ? (
-                <Chart
-                  data={analysisResults}
-                  parameter={name}
-                />
+                <ChartContainer
+                  config={{
+                    "waterTemperature": {label: "Water Temperature (°C)"},
+                    "salinity": {label: "Salinity (PSU)"},
+                    "pHLevel": {label: "pH Level"},
+                    "dissolvedOxygen": {label: "Dissolved Oxygen (mg/L)"},
+                    "turbidity": {label: "Turbidity (NTU)"},
+                    "nitrate": {label: "Nitrate (mg/L)"},
+                  }}
+                >
+                  
+                    
+                      
+                        
+                          key={index}
+                          dataKey="time"
+                          name="Time"
+                        
+                      
+                      
+                        
+                          key="waterTemperature"
+                          type="monotone"
+                          dataKey="waterTemperature"
+                          stroke="#8884d8"
+                          name="Water Temperature"
+                        
+                      
+                    
+                  
+                </ChartContainer>
               ) : (
                 
                   No data to display. Please analyze sensor data.
