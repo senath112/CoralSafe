@@ -203,6 +203,7 @@ const Home = () => {
       if (trainedModel && parsedData.length > 0) {
         const numPredictions = 5;
 
+        // Use the last available record for prediction as initial input
         let previousRecord = parsedData[parsedData.length - 1];
 
         for (let i = 0; i < numPredictions; i++) {
@@ -268,6 +269,7 @@ const Home = () => {
           };
 
           allChartData.push(predictedAnalysisResult);
+          //Next Prediction Input is Based on Previous Prediction Output
           previousRecord = predictedData;
         }
         setAnalysisResults(allChartData);
