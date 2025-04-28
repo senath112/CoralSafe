@@ -17,8 +17,9 @@ import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
-import * as tf from '@tensorflow/tfjs';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import * as tf from '@tensorflow/tfjs';
+import {Chart} from '@/components/Chart';
 
 interface AnalysisResult {
   time: string;
@@ -284,12 +285,12 @@ export default function Home() {
       const newRecord: SensorData = {
         time: `P${i + 1}`,
         location: data[0].location, // Use the location from the initial data
-        waterTemperature: predictedValues[data.length - 1 * 6 + 0] + (Math.random() - 0.5) * 0.1,
-        salinity: predictedValues[data.length - 1 * 6 + 1] + (Math.random() - 0.5) * 0.1,
-        pHLevel: predictedValues[data.length - 1 * 6 + 2] + (Math.random() - 0.5) * 0.01,
-        dissolvedOxygen: predictedValues[data.length - 1 * 6 + 3] + (Math.random() - 0.5) * 0.1,
-        turbidity: predictedValues[data.length - 1 * 6 + 4] + (Math.random() - 0.5) * 0.05,
-        nitrate: predictedValues[data.length - 1 * 6 + 5] + (Math.random() - 0.5) * 0.01,
+        waterTemperature: predictedValues[(data.length - 1) * 6 + 0] + (Math.random() - 0.5) * 0.1,
+        salinity: predictedValues[(data.length - 1) * 6 + 1] + (Math.random() - 0.5) * 0.1,
+        pHLevel: predictedValues[(data.length - 1) * 6 + 2] + (Math.random() - 0.5) * 0.01,
+        dissolvedOxygen: predictedValues[(data.length - 1) * 6 + 3] + (Math.random() - 0.5) * 0.1,
+        turbidity: predictedValues[(data.length - 1) * 6 + 4] + (Math.random() - 0.5) * 0.05,
+        nitrate: predictedValues[(data.length - 1) * 6 + 5] + (Math.random() - 0.5) * 0.01,
       };
   
       data.push(newRecord); // Add the new record to the data array
@@ -420,7 +421,7 @@ export default function Home() {
                   className="mr-2 rounded-full" 
                 />
                 
-                  CoralSafe: Sensor Data Analyzer
+                  <span>CoralSafe: Sensor Data Analyzer</span>
                 
               
             
