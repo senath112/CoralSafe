@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useCallback} from 'react';
+import {useState, useCallback, useRef, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
@@ -17,9 +17,8 @@ import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, Chart} from '@/components/ui/chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
-import * as tf from '@tensorflow/tfjs';
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
-
+import * as tf from '@tensorflow/tfjs';
 
 interface AnalysisResult {
   time: string;
@@ -70,34 +69,34 @@ const THEME_CONFIG = {
 
 const PARAMETER_STATUS_MAP = {
   waterTemperature: {
-    ideal: 'bg-green-100 text-green-500',
-    caution: 'bg-yellow-100 text-yellow-500',
-    highRisk: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    caution: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    highRisk: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
   salinity: {
-    ideal: 'bg-green-100 text-green-500',
-    caution: 'bg-yellow-100 text-yellow-500',
-    dangerous: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    caution: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    dangerous: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
   pHLevel: {
-    ideal: 'bg-green-100 text-green-500',
-    concerning: 'bg-yellow-100 text-yellow-500',
-    acidification: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    concerning: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    acidification: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
   dissolvedOxygen: {
-    ideal: 'bg-green-100 text-green-500',
-    warning: 'bg-yellow-100 text-yellow-500',
-    hypoxia: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    warning: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    hypoxia: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
   turbidity: {
-    ideal: 'bg-green-100 text-green-500',
-    reducedLight: 'bg-yellow-100 text-yellow-500',
-    stressed: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    reducedLight: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    stressed: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
   nitrate: {
-    ideal: 'bg-green-100 text-green-500',
-    manageable: 'bg-yellow-100 text-yellow-500',
-    suffocating: 'bg-red-100 text-red-500',
+    ideal: 'bg-green-100 text-green-500 rounded-full px-2 py-1',
+    manageable: 'bg-yellow-100 text-yellow-500 rounded-full px-2 py-1',
+    suffocating: 'bg-red-100 text-red-500 rounded-full px-2 py-1',
   },
 };
 
@@ -260,47 +259,45 @@ export default function Home() {
   };
 
   const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
+    let data = [...initialData]; // Start with initial data
     const numPredictions = 5;
     let predictedData: SensorData[] = [];
-    let data = [...initialData]; // Start with initial data
-    
-    for (let i = 0; i < numPredictions; i++) {
-      const lastRecord = data[data.length - 1];
   
-      // Prepare the input tensor using the data from the last prediction
+    for (let i = 0; i < numPredictions; i++) {
+      // Prepare the input tensor using all available data for the current prediction
       const inputTensor = tf.tensor2d(
-        [
-          [
-            lastRecord.waterTemperature,
-            lastRecord.salinity,
-            lastRecord.pHLevel,
-            lastRecord.dissolvedOxygen,
-            lastRecord.turbidity,
-            lastRecord.nitrate,
-          ],
-        ],
-        [1, 6]
+        data.map(record => [
+          record.waterTemperature,
+          record.salinity,
+          record.pHLevel,
+          record.dissolvedOxygen,
+          record.turbidity,
+          record.nitrate,
+        ]),
+        [data.length, 6]
       );
   
       // Generate predictions
       const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
       const predictedValues = await predictions.data();
   
+      // Use the last prediction for the new record
+      const lastPredictionIndex = (data.length - 1) * 6; // Index of the last prediction
       const predictionTime = `P${i + 1}`; // Predicted Time
   
       const newRecord: SensorData = {
         time: predictionTime,
-        location: lastRecord.location,
-        waterTemperature: predictedValues[0] + (Math.random() - 0.5) * 0.1,
-        salinity: predictedValues[1] + (Math.random() - 0.5) * 0.1,
-        pHLevel: predictedValues[2] + (Math.random() - 0.5) * 0.01,
-        dissolvedOxygen: predictedValues[3] + (Math.random() - 0.5) * 0.1,
-        turbidity: predictedValues[4] + (Math.random() - 0.5) * 0.05,
-        nitrate: predictedValues[5] + (Math.random() - 0.5) * 0.01,
+        location: data[0].location, // Use the location from the initial data
+        waterTemperature: predictedValues[lastPredictionIndex] + (Math.random() - 0.5) * 0.1,
+        salinity: predictedValues[lastPredictionIndex + 1] + (Math.random() - 0.5) * 0.1,
+        pHLevel: predictedValues[lastPredictionIndex + 2] + (Math.random() - 0.5) * 0.01,
+        dissolvedOxygen: predictedValues[lastPredictionIndex + 3] + (Math.random() - 0.5) * 0.1,
+        turbidity: predictedValues[lastPredictionIndex + 4] + (Math.random() - 0.5) * 0.05,
+        nitrate: predictedValues[lastPredictionIndex + 5] + (Math.random() - 0.5) * 0.01,
       };
   
       predictedData.push(newRecord);
-      data = [...data, newRecord]; // Update data for the next prediction
+      data.push(newRecord); // Update data for the next prediction
     }
   
     return [...initialData, ...predictedData];
@@ -422,8 +419,12 @@ export default function Home() {
           
             
               
-                <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
-                CoralSafe: Sensor Data Analyzer
+                
+                  
+                    <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
+                    CoralSafe: Sensor Data Analyzer
+                  
+                
               
             
           
@@ -571,8 +572,7 @@ export default function Home() {
               
               
                 
-                  
-                    {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                  {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
                   
                 
               
@@ -610,5 +610,9 @@ export default function Home() {
     
   );
 }
+
+
+
+
 
 
