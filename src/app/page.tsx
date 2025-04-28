@@ -3,7 +3,7 @@
 import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import {Card, CardContent, CardHeader, CardDescription, CardTitle} from '@/components/ui/card';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {defineSensorDataThresholds, analyzeSensorData} from '@/lib/utils';
 import {ChartContainer} from '@/components/Chart';
@@ -202,8 +202,7 @@ const Home = () => {
       // Predict future data points using TensorFlow.js model
       if (trainedModel && parsedData.length > 0) {
         const numPredictions = 5;
-
-        // Use the last available record for prediction as initial input
+         // Use the last available record for prediction as initial input
         let previousRecord = parsedData[parsedData.length - 1];
 
         for (let i = 0; i < numPredictions; i++) {
@@ -256,7 +255,7 @@ const Home = () => {
             pHLevel: predictedData.pHLevel,
             dissolvedOxygen: predictedData.dissolvedOxygen,
             turbidity: predictedData.turbidity,
-            nitrate: predictedNitrate,
+            nitrate: predictedData.nitrate,
             isSuitable: predictedIsSuitable,
             summary: predictedSummary,
             improvements: predictedImprovements,
@@ -282,66 +281,10 @@ const Home = () => {
     }
   };
 
-  const bubbles = Array.from({length: 20}, (_, i) => ({
-    id: i,
-    size: Math.random() * 30 + 10,
-    left: Math.random() * 100 + '%',
-    animationDuration: Math.random() * 5 + 5 + 's',
-  }));
-
-  const fishImages = [
-    '/fish.png',
-  ];
-
-  const fishes = Array.from({length: 5}, (_, i) => ({
-    id: i,
-    width: Math.random() * 30 + 20,
-    height: Math.random() * 15 + 10,
-    left: Math.random() * 100 + '%',
-    top: Math.random() * 80 + 10 + '%',
-    animationDuration: Math.random() * 5 + 5 + 's',
-    animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
-    src: fishImages[Math.floor(Math.random() * fishImages.length)],
-  }));
-
   return (
     
-      {/* Bubbles */}
       
-        {bubbles.map((bubble) => (
-          
-             key={bubble.id}
-             className="bubble"
-             style={{
-               width: bubble.size + 'px',
-               height: bubble.size + 'px',
-               left: bubble.left,
-               animationDuration: bubble.animationDuration,
-             }}
-           />
-        ))}
-      
-      {/* Animated Fish */}
-      
-        {fishes.map((fish) => (
-          
-            <img
-              key={fish.id}
-              src={fish.src}
-              alt="Fish"
-              style={{
-                width: fish.width + 'px',
-                height: fish.height + 'px',
-                left: fish.left,
-                top: fish.top,
-                animationDuration: fish.animationDuration,
-                animationDirection: fish.animationDirection,
-                objectFit: 'contain',
-                transform: 'scaleX(-1)',
-              }}
-            />
-          
-        ))}
+
       
 
       
@@ -583,3 +526,4 @@ const Home = () => {
 };
 
 export default Home;
+
