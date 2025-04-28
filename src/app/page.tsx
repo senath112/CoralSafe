@@ -3,7 +3,7 @@
 import {useState, useEffect, useCallback} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardHeader, CardDescription, CardTitle} from '@/components/ui/card';
+import {Card, CardContent, CardHeader} from '@/components/ui/card';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {defineSensorDataThresholds, analyzeSensorData} from '@/lib/utils';
 import {ChartContainer} from '@/components/Chart';
@@ -295,7 +295,7 @@ const Home = () => {
                 <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
                 <AvatarFallback>CS</AvatarFallback>
               </Avatar>
-              CoralSafe: Sensor Data Analyzer
+              {"CoralSafe: Sensor Data Analyzer"}
             
           
         
@@ -476,7 +476,7 @@ const Home = () => {
             
               
                 
-                  {name} Over Time
+                  {`${name} Over Time`}
                 
               
               
