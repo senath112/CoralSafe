@@ -101,5 +101,11 @@ In the build settings:
 - **Build command**: Set this to:
   ```bash
   npm run build
-  
+
+## Contact Information
+
+If you have any questions, feel free to reach out to me:
+  - **Email**: [senathsethmika@gmail.com](mailto:senathsethmika@gmail.com)
+  - **LinkedIn**: [Senath Sethmika](https://www.linkedin.com/in/senath-sethmika-b8584a268/)
+  - **Facebook**: [Senath Sethmika](https://www.facebook.com/senath.sethmika/)
 >>>>>>> acf85e447b1bb34d77c2697ecb17c515a6a87366
