@@ -14,7 +14,7 @@ import {
   TableCaption,
 } from '@/components/ui/table';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, Chart} from '@/components/ui/chart';
+import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent} from '@/components/ui/chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
@@ -261,7 +261,6 @@ export default function Home() {
   const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
     let data = [...initialData]; // Start with initial data
     const numPredictions = 5;
-    let predictedData: SensorData[] = [];
   
     for (let i = 0; i < numPredictions; i++) {
       // Prepare the input tensor using all available data for the current prediction
@@ -282,25 +281,21 @@ export default function Home() {
       const predictedValues = await predictions.data();
   
       // Use the last prediction for the new record
-      const lastPredictionIndex = (data.length - 1) * 6; // Index of the last prediction
-      const predictionTime = `P${i + 1}`; // Predicted Time
-  
       const newRecord: SensorData = {
-        time: predictionTime,
+        time: `P${i + 1}`,
         location: data[0].location, // Use the location from the initial data
-        waterTemperature: predictedValues[lastPredictionIndex] + (Math.random() - 0.5) * 0.1,
-        salinity: predictedValues[lastPredictionIndex + 1] + (Math.random() - 0.5) * 0.1,
-        pHLevel: predictedValues[lastPredictionIndex + 2] + (Math.random() - 0.5) * 0.01,
-        dissolvedOxygen: predictedValues[lastPredictionIndex + 3] + (Math.random() - 0.5) * 0.1,
-        turbidity: predictedValues[lastPredictionIndex + 4] + (Math.random() - 0.5) * 0.05,
-        nitrate: predictedValues[lastPredictionIndex + 5] + (Math.random() - 0.5) * 0.01,
+        waterTemperature: predictedValues[data.length - 1 * 6 + 0] + (Math.random() - 0.5) * 0.1,
+        salinity: predictedValues[data.length - 1 * 6 + 1] + (Math.random() - 0.5) * 0.1,
+        pHLevel: predictedValues[data.length - 1 * 6 + 2] + (Math.random() - 0.5) * 0.01,
+        dissolvedOxygen: predictedValues[data.length - 1 * 6 + 3] + (Math.random() - 0.5) * 0.1,
+        turbidity: predictedValues[data.length - 1 * 6 + 4] + (Math.random() - 0.5) * 0.05,
+        nitrate: predictedValues[data.length - 1 * 6 + 5] + (Math.random() - 0.5) * 0.01,
       };
   
-      predictedData.push(newRecord);
-      data.push(newRecord); // Update data for the next prediction
+      data.push(newRecord); // Add the new record to the data array
     }
   
-    return [...initialData, ...predictedData];
+    return data;
   };
 
   const defineSensorDataThresholds = () => ({
@@ -420,8 +415,8 @@ export default function Home() {
             
               
                 
+                  <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
                   
-                    <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
                     CoralSafe: Sensor Data Analyzer
                   
                 
@@ -610,9 +605,4 @@ export default function Home() {
     
   );
 }
-
-
-
-
-
 
