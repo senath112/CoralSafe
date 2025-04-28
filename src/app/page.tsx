@@ -258,30 +258,44 @@ export default function Home() {
       const limitedInitialChartData = initialChartData.slice(Math.max(initialChartData.length - 95, 0));
 
       // Predict future data points using TensorFlow.js model
-      if (model) {
+      if (model && parsedData.length > 0) {
         const numPredictions = 5;
-        const lastRecord = parsedData[parsedData.length - 1];
-
-        const inputTensor = tf.tensor2d(
-          [
-            [
-              lastRecord.waterTemperature,
-              lastRecord.salinity,
-              lastRecord.pHLevel,
-              lastRecord.dissolvedOxygen,
-              lastRecord.turbidity,
-              lastRecord.nitrate,
-            ],
-          ],
-          [1, 6],
-        );
-
-        const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-        const predictedValues = await predictions.data();
-
-        const predictedChartData = [];
+        const predictedChartData: ChartData[] = [];
+        let previousRecord: SensorData = parsedData[parsedData.length - 1]; // Start with the last actual record
+  
         for (let i = 0; i < numPredictions; i++) {
-          const predictionTime = `P${i + 1}`; // Predicted Time
+          // Prepare the input tensor using the last available record
+          const inputTensor = tf.tensor2d(
+            [
+              [
+                previousRecord.waterTemperature,
+                previousRecord.salinity,
+                previousRecord.pHLevel,
+                previousRecord.dissolvedOxygen,
+                previousRecord.turbidity,
+                previousRecord.nitrate,
+              ],
+            ],
+            [1, 6]
+          );
+  
+          // Generate predictions
+          const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
+          const predictedValues = await predictions.data();
+  
+          // Create a new predicted record
+          const predictionTime = `P${i + 1}`;
+          const newRecord: SensorData = {
+            time: predictionTime,
+            location: previousRecord.location, // Assume location remains the same
+            waterTemperature: predictedValues[0],
+            salinity: predictedValues[1],
+            pHLevel: predictedValues[2],
+            dissolvedOxygen: predictedValues[3],
+            turbidity: predictedValues[4],
+            nitrate: predictedValues[5],
+          };
+  
           predictedChartData.push({
             time: predictionTime,
             waterTemperature: predictedValues[0],
@@ -292,6 +306,8 @@ export default function Home() {
             nitrate: predictedValues[5],
             isPrediction: true, // Mark as prediction
           });
+  
+          previousRecord = newRecord; // Use the new predicted record for the next prediction
         }
 
         // Combine historical data with predicted data for overall chart
@@ -415,7 +431,7 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
       <div className="max-w-5xl w-full space-y-8">
-        <Card>
+        <Card className="bg-card shadow-md rounded-md">
           <CardHeader>
             <CardTitle>
               <div className="flex items-center">
@@ -426,7 +442,7 @@ export default function Home() {
                   height={40}
                   className="mr-2 rounded-full"
                 />
-                CoralSafe: Sensor Data Analyzer
+                <span className="text-lg font-semibold">CoralSafe: Sensor Data Analyzer</span>
               </div>
             </CardTitle>
             <CardDescription>
@@ -435,22 +451,24 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div>Sensor Data Input</div>
-            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+            <div className="mb-4">
+              Sensor Data Input
+            </div>
             <Textarea
               placeholder="Paste sensor data here"
               rows={4}
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
+              className="shadow-sm rounded-md"
             />
-            <Button onClick={analyzeData} disabled={isLoading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button onClick={analyzeData} disabled={isLoading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-4 rounded-md">
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
             {isLoading && (
-              <Progress value={progress} className="w-full" />
+              <Progress value={progress} className="w-full mt-2" />
             )}
             {errorMessage && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="mt-4 rounded-md">
                 <AlertTitle>Error</AlertTitle>
                 {errorMessage}
               </Alert>
@@ -459,7 +477,7 @@ export default function Home() {
         </Card>
 
         {analysisResults.length > 0 && (
-          <Card>
+          <Card className="shadow-md rounded-md">
             <CardHeader>
               <CardTitle>Analysis Results</CardTitle>
               <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
@@ -468,16 +486,16 @@ export default function Home() {
               <Table className="rounded-md shadow-md">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-left font-medium">Time</TableHead>
-                    <TableHead className="text-left font-medium">Location</TableHead>
-                    <TableHead className="text-left font-medium">Suitability</TableHead>
-                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
-                    <TableHead className="text-left font-medium">Salinity</TableHead>
-                    <TableHead className="text-left font-medium">pH Level</TableHead>
-                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
-                    <TableHead className="text-left font-medium">Turbidity</TableHead>
-                    <TableHead className="text-left font-medium">Nitrate</TableHead>
-                    <TableHead className="text-left font-medium">Summary</TableHead>
+                    <TableHead className="text-left font-medium py-2">Time</TableHead>
+                    <TableHead className="text-left font-medium py-2">Location</TableHead>
+                    <TableHead className="text-left font-medium py-2">Suitability</TableHead>
+                    <TableHead className="text-left font-medium py-2">Water Temperature</TableHead>
+                    <TableHead className="text-left font-medium py-2">Salinity</TableHead>
+                    <TableHead className="text-left font-medium py-2">pH Level</TableHead>
+                    <TableHead className="text-left font-medium py-2">Dissolved Oxygen</TableHead>
+                    <TableHead className="text-left font-medium py-2">Turbidity</TableHead>
+                    <TableHead className="text-left font-medium py-2">Nitrate</TableHead>
+                    <TableHead className="text-left font-medium py-2">Summary</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -489,29 +507,29 @@ export default function Home() {
                         {result.isSuitable === null ? (
                           'Analyzing...'
                         ) : result.isSuitable ? (
-                          <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }}>
+                          <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }} className="rounded-md">
                             Suitable
                           </Badge>
                         ) : (
-                          <Badge variant="destructive">
+                          <Badge variant="destructive" className="rounded-md">
                             Threatening
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('waterTemperature', parseFloat(result.waterTemperature))}}>{result.waterTemperature}</TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('salinity', parseFloat(result.salinity))}}>{result.salinity}</TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('pHLevel', parseFloat(result.pHLevel))}}>{result.pHLevel}</TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('dissolvedOxygen', parseFloat(result.dissolvedOxygen))}}>{result.dissolvedOxygen}</TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('turbidity', parseFloat(result.turbidity))}}>{result.turbidity}</TableCell>
-                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('nitrate', parseFloat(result.nitrate))}}>{result.nitrate}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('waterTemperature', parseFloat(result.waterTemperature)), borderRadius: '0.5rem' }}>{result.waterTemperature}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('salinity', parseFloat(result.salinity)), borderRadius: '0.5rem' }}>{result.salinity}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('pHLevel', parseFloat(result.pHLevel)), borderRadius: '0.5rem' }}>{result.pHLevel}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('dissolvedOxygen', parseFloat(result.dissolvedOxygen)), borderRadius: '0.5rem' }}>{result.dissolvedOxygen}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('turbidity', parseFloat(result.turbidity)), borderRadius: '0.5rem' }}>{result.turbidity}</TableCell>
+                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('nitrate', parseFloat(result.nitrate)), borderRadius: '0.5rem' }}>{result.nitrate}</TableCell>
                        <TableCell className="py-2">
                         {result.summary ? (
                           <Accordion type="single" collapsible>
                             <AccordionItem value={`summary-${index}`}>
-                              <AccordionTrigger>
+                              <AccordionTrigger className="text-sm font-medium">
                                 View Summary
                               </AccordionTrigger>
-                              <AccordionContent>
+                              <AccordionContent className="text-sm text-muted-foreground">
                                 {result.summary}
                               </AccordionContent>
                             </AccordionItem>
@@ -525,14 +543,14 @@ export default function Home() {
                 </TableBody>
               </Table>
               {overallSuitability !== null && (
-                <div>
+                <div className="mt-4">
                   Overall Suitability:
                   {overallSuitability ? (
-                    <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }}>
+                    <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }} className="ml-2 rounded-md">
                       Suitable
                     </Badge>
                   ) : (
-                    <Badge variant="destructive">
+                    <Badge variant="destructive" className="ml-2 rounded-md">
                       Threatening
                     </Badge>
                   )}
@@ -547,7 +565,7 @@ export default function Home() {
         {renderChart(oxygenChartData, 'dissolvedOxygen', 'Dissolved Oxygen', '#a4de6c')}
         {renderChart(turbidityChartData, 'turbidity', 'Turbidity', '#d0ed57')}
         {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
-              <Card>
+              <Card className="shadow-md rounded-md">
         <CardHeader>
           <CardTitle>All Parameters Over Time</CardTitle>
           <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
@@ -575,4 +593,3 @@ export default function Home() {
     </div>
   );
 }
-
