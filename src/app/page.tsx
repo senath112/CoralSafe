@@ -256,7 +256,7 @@ const Home = () => {
             pHLevel: predictedData.pHLevel,
             dissolvedOxygen: predictedData.dissolvedOxygen,
             turbidity: predictedData.turbidity,
-            nitrate: predictedData.nitrate,
+            nitrate: predictedNitrate,
             isSuitable: predictedIsSuitable,
             summary: predictedSummary,
             improvements: predictedImprovements,
