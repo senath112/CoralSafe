@@ -310,6 +310,15 @@ const Home = () => {
       
         {bubbles.map((bubble) => (
           
+             key={bubble.id}
+             className="bubble"
+             style={{
+               width: bubble.size + 'px',
+               height: bubble.size + 'px',
+               left: bubble.left,
+               animationDuration: bubble.animationDuration,
+             }}
+           />
         ))}
       
       {/* Animated Fish */}
