@@ -19,7 +19,7 @@ import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/co
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
-import {Chart} from '@/components/Chart';
+import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent} from '@/components/ui/chart';
 
 interface AnalysisResult {
   time: string;
@@ -178,7 +178,6 @@ export default function Home() {
   }, [sensorData]);
 
   const parseData = (data: string): SensorData[] | null => {
-    // Splitting by newline to separate entries
     return data.split('\n').slice(1).map(entry => { // Skip the header row
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== 8) {
@@ -420,9 +419,7 @@ export default function Home() {
                   alt="CoralSafe Logo" 
                   className="mr-2 rounded-full" 
                 />
-                
-                  <span>CoralSafe: Sensor Data Analyzer</span>
-                
+                <span>CoralSafe: Sensor Data Analyzer</span>
               
             
           
@@ -430,7 +427,11 @@ export default function Home() {
             
               Sensor Data Input
             
-            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+            
+              Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+            
+          
+          
             
               
                 Paste sensor data here
@@ -439,6 +440,8 @@ export default function Home() {
                 onChange={(e) => setSensorData(e.target.value)}
               />
             
+          
+          
             
               Analyze Sensor Data
             
@@ -632,5 +635,4 @@ export default function Home() {
     
   );
 }
-
 
