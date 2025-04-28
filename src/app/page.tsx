@@ -413,153 +413,111 @@ export default function Home() {
         
           
             
-              
+              <Avatar>
                 <AvatarImage 
                   src="https://picsum.photos/50/50" 
                   alt="CoralSafe Logo" 
                   className="mr-2 rounded-full" 
                 />
-                <span>CoralSafe: Sensor Data Analyzer</span>
-              
+                <AvatarFallback>CS</AvatarFallback>
+              </Avatar>
+              <span>CoralSafe: Sensor Data Analyzer</span>
             
           
           
-            
-              Sensor Data Input
-            
-            
-              Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
-            
+            Sensor Data Input
           
           
-            
-              
-                Paste sensor data here
-                
-                value={sensorData}
-                onChange={(e) => setSensorData(e.target.value)}
-              />
-            
+            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
           
+        
+        
           
-            
-              Analyze Sensor Data
-            
-            {isLoading && (
-              
-                Analyzing Data... {analysisProgress.toFixed(2)}%
-              
-            )}
+            <Textarea
+              placeholder="Paste sensor data here"
+              value={sensorData}
+              onChange={(e) => setSensorData(e.target.value)}
+            />
           
+        
+        
+          
+ Analyze Sensor Data
+          
+          {isLoading && (
+            
+              Analyzing Data... {analysisProgress.toFixed(2)}%
+            
+          )}
         
       
-
-      {analysisResults.length > 0 && (
-        
+      
+        {analysisResults.length > 0 && (
           
             
-              Analysis Results
+              
+Analysis Results
+              
+                This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
+              
             
-            
-              This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
-            
-          
-          
             
               
                 
                   
                     Time
-                  
-                  
                     Location
-                  
-                  
                     Suitability
-                  
-                  
                     Water Temperature
-                  
-                  
                     Salinity
-                  
-                  
                     pH Level
-                  
-                  
                     Dissolved Oxygen
-                  
-                  
                     Turbidity
-                  
-                  
                     Nitrate
-                  
-                  
                     Improvements
                   
                 
-              
-              
-                {analysisResults.map((result, index) => (
-                  
+                
+                  {analysisResults.map((result, index) => (
                     
-                      {result.time}
-                    
-                    
-                      {result.location}
-                    
-                    
-                      {result.isSuitable === null ? (
+                      
+                        {result.time}
+                        {result.location}
                         
-                          Analyzing...
+                          {result.isSuitable === null ? (
+                            
+                              Analyzing...
+                            
+                          ) : result.isSuitable ? (
+                            
+                              Suitable
+                            
+                          ) : (
+                            
+                              Threatening
+                            
+                          )}
                         
-                      ) : result.isSuitable ? (
                         
-                          Suitable
+                          {result.waterTemperature}
                         
-                      ) : (
                         
-                          Threatening
+                          {result.salinity}
                         
-                      )}
-                    
-                    
-                      
-                        {result.waterTemperature}
-                      
-                    
-                    
-                      
-                        {result.salinity}
-                      
-                    
-                    
-                      
-                        {result.pHLevel}
-                      
-                    
-                    
-                      
-                        {result.dissolvedOxygen}
-                      
-                    
-                    
-                      
-                        {result.turbidity}
-                      
-                    
-                    
-                      
-                        {result.nitrate}
-                      
-                    
-                    
-                      
                         
-                          
-                            Threatening Factors and Suggested Actions
-                          
+                          {result.pHLevel}
+                        
+                        
+                          {result.dissolvedOxygen}
+                        
+                        
+                          {result.turbidity}
+                        
+                        
+                          {result.nitrate}
+                        
+                        
+ Threatening Factors and Suggested Actions
                           
                             
                               
@@ -573,66 +531,63 @@ export default function Home() {
                         
                       
                     
-                  
-                ))}
+                  ))}
+                
               
             
           
-        
-      )}
+        )}
 
-      {Object.keys(THEME_CONFIG).map((name) => (
-        
+        {Object.keys(THEME_CONFIG).map((name) => (
           
             
-              {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time
-            
-            
-              Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
-            
-          
-          
-            {analysisResults.length > 0 ? (
               
+                {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time
+              
+              
+                Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
+              
+            
+            
+              {analysisResults.length > 0 ? (
                 
                   
                     
                       
-                    
-                    
+                        
                       
-                    
-                    
                       
-                    
-                    
+                        
                       
-                    
-                    
                       
-                    
-                    
+                        
                       
-                    
-                    
+                      
+                        
+                      
+                      
+                        
+                      
+                      
+                        
+                      
                       
                         
                       
                     
                   
                 
-              
-            ) : (
-              
+              ) : (
                 
                   No data to display. Please input sensor data and analyze.
                 
-              
-            )}
+              )}
+            
           
-        
-      ))}
+        ))}
+      
     
   );
 }
+
 
