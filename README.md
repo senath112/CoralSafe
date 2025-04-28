@@ -68,4 +68,38 @@ Each value **includes units** for realism.
 - Seasonal datasets (not just April)
 
 ---
+# CoralSafe Deployment Guide
+
+This guide will help you deploy the CoralSafe application on **Netlify** and set up the **Gemini AI** API integration using the `.env` file.
+
+## Steps to Deploy on Netlify
+
+Follow these instructions to deploy your app to Netlify.
+
+### 1. **Prepare Your Project for Deployment**
+
+Before you deploy, ensure that your project is properly set up. You need to have:
+
+- A **React (or Next.js)** project built with TypeScript (`.tsx` files).
+- Your project includes all necessary files like `src/`, `components/`, `hooks/`, and `lib/` directories.
+
+### 2. **Create a Netlify Account**
+
+- Go to [Netlify](https://www.netlify.com/) and sign up or log in if you already have an account.
+
+### 3. **Connect Your GitHub Repository to Netlify**
+
+- After logging into Netlify, click the **New Site from Git** button.
+- Select **GitHub** as the provider.
+- Authorize Netlify to access your GitHub repositories.
+- Choose the repository where your project is stored.
+
+### 4. **Configure Build Settings**
+
+In the build settings:
+- **Branch to deploy**: Select the branch you want to deploy (usually `main` or `master`).
+- **Build command**: Set this to:
+  ```bash
+  npm run build
+  
 >>>>>>> acf85e447b1bb34d77c2697ecb17c515a6a87366
