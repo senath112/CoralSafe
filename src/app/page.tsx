@@ -202,18 +202,20 @@ const Home = () => {
       // Predict future data points using TensorFlow.js model
       if (trainedModel && parsedData.length > 0) {
         const numPredictions = 5;
-        let lastRecord = parsedData[parsedData.length - 1];
+
+        let previousRecord = parsedData[parsedData.length - 1];
 
         for (let i = 0; i < numPredictions; i++) {
+          // Prepare the input tensor using the last record's data
           const inputTensor = tf.tensor2d(
             [
               [
-                lastRecord.waterTemperature,
-                lastRecord.salinity,
-                lastRecord.pHLevel,
-                lastRecord.dissolvedOxygen,
-                lastRecord.turbidity,
-                lastRecord.nitrate,
+                previousRecord.waterTemperature,
+                previousRecord.salinity,
+                previousRecord.pHLevel,
+                previousRecord.dissolvedOxygen,
+                previousRecord.turbidity,
+                previousRecord.nitrate,
               ],
             ],
             [1, 6]
@@ -266,7 +268,7 @@ const Home = () => {
           };
 
           allChartData.push(predictedAnalysisResult);
-          lastRecord = predictedData;
+          previousRecord = predictedData;
         }
         setAnalysisResults(allChartData);
       }
