@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardHeader, CardDescription, CardTitle} from '@/components/ui/card';
@@ -291,12 +291,16 @@ const Home = () => {
         
           
             
+              <Avatar>
+                <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
+                <AvatarFallback>CS</AvatarFallback>
+              </Avatar>
               CoralSafe: Sensor Data Analyzer
             
           
         
         
-          Enter sensor data for a reef location over multiple times, separated by newlines.
+          Sensor Data Input
           
             Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
           
@@ -518,8 +522,8 @@ const Home = () => {
                 
               )}
             
-          ))}
-        
+          
+        ))}
       
     
   );
