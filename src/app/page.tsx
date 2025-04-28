@@ -14,7 +14,6 @@ import {
   TableCaption,
 } from '@/components/ui/table';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent} from '@/components/ui/chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
@@ -415,140 +414,171 @@ export default function Home() {
           
             
               
+                <AvatarImage 
+                  src="https://picsum.photos/50/50" 
+                  alt="CoralSafe Logo" 
+                  className="mr-2 rounded-full" 
+                />
                 
-                  <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
-                  <span>CoralSafe: Sensor Data Analyzer</span>
+                  CoralSafe: Sensor Data Analyzer
                 
               
             
           
-        
-        
-          Sensor Data Input
-        
-        Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
-        
-        
-          <Textarea
-            placeholder="Paste sensor data here"
-            value={sensorData}
-            onChange={(e) => setSensorData(e.target.value)}
-          />
-        
-        
-          Analyze Sensor Data
-        
-        {isLoading && (
           
-            Analyzing Data... {analysisProgress.toFixed(2)}%
+            
+              Sensor Data Input
+            
+            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+            
+              
+                Paste sensor data here
+                
+                value={sensorData}
+                onChange={(e) => setSensorData(e.target.value)}
+              />
+            
+            
+              Analyze Sensor Data
+            
+            {isLoading && (
+              
+                Analyzing Data... {analysisProgress.toFixed(2)}%
+              
+            )}
           
-        )}
+        
+      
 
-        {analysisResults.length > 0 && (
+      {analysisResults.length > 0 && (
+        
+          
+            
+              Analysis Results
+            
+            
+              This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
+            
+          
           
             
               
                 
-                  Time
-                  Location
-                  Suitability
-                  Water Temperature
-                  Salinity
-                  pH Level
-                  Dissolved Oxygen
-                  Turbidity
-                  Nitrate
-                  Improvements
+                  
+                    Time
+                  
+                  
+                    Location
+                  
+                  
+                    Suitability
+                  
+                  
+                    Water Temperature
+                  
+                  
+                    Salinity
+                  
+                  
+                    pH Level
+                  
+                  
+                    Dissolved Oxygen
+                  
+                  
+                    Turbidity
+                  
+                  
+                    Nitrate
+                  
+                  
+                    Improvements
+                  
                 
               
-            
-            
-              {analysisResults.map((result, index) => (
-                
-                  
-                    {result.time}
-                  
-                  
-                    {result.location}
-                  
-                  
-                    {result.isSuitable === null ? (
-                      
-                        Analyzing...
-                      
-                    ) : result.isSuitable ? (
-                      
-                        Suitable
-                      
-                    ) : (
-                      
-                        Threatening
-                      
-                    )}
-                  
-                  
-                    
-                      {result.waterTemperature}
-                    
-                  
-                  
-                    
-                      {result.salinity}
-                    
-                  
-                  
-                    
-                      {result.pHLevel}
-                    
-                  
-                  
-                    
-                      {result.dissolvedOxygen}
-                    
-                  
-                  
-                    
-                      {result.turbidity}
-                    
-                  
-                  
-                    
-                      {result.nitrate}
-                    
-                  
-                  
-                    
-                      
-                        
-                          Threatening Factors
-                        
-                        
-                          {result.threateningFactors}
-                        
-                      
-                      
-                        
-                          Suggested Actions
-                        
-                        
-                          {result.suggestedActions}
-                        
-                      
-                    
-                  
-                
-              ))}
-            
-            
               
-                This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
+                {analysisResults.map((result, index) => (
+                  
+                    
+                      {result.time}
+                    
+                    
+                      {result.location}
+                    
+                    
+                      {result.isSuitable === null ? (
+                        
+                          Analyzing...
+                        
+                      ) : result.isSuitable ? (
+                        
+                          Suitable
+                        
+                      ) : (
+                        
+                          Threatening
+                        
+                      )}
+                    
+                    
+                      
+                        {result.waterTemperature}
+                      
+                    
+                    
+                      
+                        {result.salinity}
+                      
+                    
+                    
+                      
+                        {result.pHLevel}
+                      
+                    
+                    
+                      
+                        {result.dissolvedOxygen}
+                      
+                    
+                    
+                      
+                        {result.turbidity}
+                      
+                    
+                    
+                      
+                        {result.nitrate}
+                      
+                    
+                    
+                      
+                        
+                          
+                            Threatening Factors and Suggested Actions
+                          
+                          
+                            
+                              
+                                <strong>Threatening Factors:</strong> {result.threateningFactors}
+                              
+                              
+                                <strong>Suggested Actions:</strong> {result.suggestedActions}
+                              
+                            
+                          
+                        
+                      
+                    
+                  
+                ))}
               
             
           
-        )}
-      
-      
-        {Object.keys(THEME_CONFIG).map((name) => (
+        
+      )}
+
+      {Object.keys(THEME_CONFIG).map((name) => (
+        
           
             
               {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time
@@ -558,49 +588,48 @@ export default function Home() {
             
           
           
-            
-              
-            
+            {analysisResults.length > 0 ? (
               
                 
-              
-              
-                
-                  {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                  
+                    
+                      
+                    
+                    
+                      
+                    
+                    
+                      
+                    
+                    
+                      
+                    
+                    
+                      
+                    
+                    
+                      
+                    
+                    
+                      
+                        
+                      
+                    
                   
                 
               
-            
+            ) : (
               
                 
-                  {analysisResults.map((result) => (
-                    
-                  ))}
+                  No data to display. Please input sensor data and analyze.
                 
               
-              
-                
-                  {analysisResults.map((result) => (
-                    
-                      {result.time}
-                    
-                  ))}
-                
-              
-              
-                
-                  {analysisResults.map((result) => (
-                    
-                      {result[name as keyof AnalysisResult]}
-                    
-                  ))}
-                
-              
-            
+            )}
           
         
-      )}
-      
+      ))}
     
   );
 }
+
+
