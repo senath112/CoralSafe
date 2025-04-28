@@ -70,34 +70,34 @@ const THEME_CONFIG = {
 
 const PARAMETER_STATUS_MAP = {
   waterTemperature: {
-    ideal: 'text-green-500',
-    caution: 'text-yellow-500',
-    highRisk: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    caution: 'bg-yellow-100 text-yellow-500',
+    highRisk: 'bg-red-100 text-red-500',
   },
   salinity: {
-    ideal: 'text-green-500',
-    caution: 'text-yellow-500',
-    dangerous: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    caution: 'bg-yellow-100 text-yellow-500',
+    dangerous: 'bg-red-100 text-red-500',
   },
   pHLevel: {
-    ideal: 'text-green-500',
-    concerning: 'text-yellow-500',
-    acidification: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    concerning: 'bg-yellow-100 text-yellow-500',
+    acidification: 'bg-red-100 text-red-500',
   },
   dissolvedOxygen: {
-    ideal: 'text-green-500',
-    warning: 'text-yellow-500',
-    hypoxia: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    warning: 'bg-yellow-100 text-yellow-500',
+    hypoxia: 'bg-red-100 text-red-500',
   },
   turbidity: {
-    ideal: 'text-green-500',
-    reducedLight: 'text-yellow-500',
-    stressed: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    reducedLight: 'bg-yellow-100 text-yellow-500',
+    stressed: 'bg-red-100 text-red-500',
   },
   nitrate: {
-    ideal: 'text-green-500',
-    manageable: 'text-yellow-500',
-    suffocating: 'text-red-500',
+    ideal: 'bg-green-100 text-green-500',
+    manageable: 'bg-yellow-100 text-yellow-500',
+    suffocating: 'bg-red-100 text-red-500',
   },
 };
 
@@ -263,7 +263,7 @@ export default function Home() {
     const numPredictions = 5;
     let predictedData: SensorData[] = [];
     let data = [...initialData]; // Start with initial data
-
+    
     for (let i = 0; i < numPredictions; i++) {
       const lastRecord = data[data.length - 1];
   
@@ -421,11 +421,10 @@ export default function Home() {
         
           
             
-              <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
-              <AvatarFallback>CS</AvatarFallback>
-            
-            
-              CoralSafe: Sensor Data Analyzer
+              
+                <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
+                CoralSafe: Sensor Data Analyzer
+              
             
           
         
@@ -454,16 +453,18 @@ export default function Home() {
           
             
               
-                Time
-                Location
-                Suitability
-                Water Temperature
-                Salinity
-                pH Level
-                Dissolved Oxygen
-                Turbidity
-                Nitrate
-                Improvements
+                
+                  Time
+                  Location
+                  Suitability
+                  Water Temperature
+                  Salinity
+                  pH Level
+                  Dissolved Oxygen
+                  Turbidity
+                  Nitrate
+                  Improvements
+                
               
             
             
@@ -563,19 +564,44 @@ export default function Home() {
           
           
             
-              <ChartTooltip>
-                
-              </ChartTooltip>
               
             
-              <Chart.Line
-                name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
-                dataKey={name}
-                stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
-                strokeWidth={2}
-                dot={true}
-                isAnimationActive={false}
-              />
+              
+                
+              
+              
+                
+                  
+                    {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                  
+                
+              
+            
+              
+                
+                  {analysisResults.map((result) => (
+                    
+                  ))}
+                
+              
+              
+                
+                  {analysisResults.map((result) => (
+                    
+                      {result.time}
+                    
+                  ))}
+                
+              
+              
+                
+                  {analysisResults.map((result) => (
+                    
+                      {result[name as keyof AnalysisResult]}
+                    
+                  ))}
+                
+              
             
           
         
