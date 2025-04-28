@@ -1,29 +1,25 @@
 'use client';
 
-import {useState, useEffect, useCallback} from 'react';
+import {useState, useCallback} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardHeader} from '@/components/ui/card';
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableCaption,
+} from '@/components/ui/table';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {defineSensorDataThresholds, analyzeSensorData} from '@/lib/utils';
-import {ChartContainer} from '@/components/Chart';
+import {ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, Chart} from '@/components/ui/chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs';
-import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar";
+import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
 
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {Badge} from "@/components/ui/badge";
-
-import {cn} from "@/lib/utils";
 
 interface AnalysisResult {
   time: string;
@@ -35,15 +31,75 @@ interface AnalysisResult {
   turbidity: number;
   nitrate: number;
   isSuitable: boolean | null;
-  summary: string;
-  improvements: string;
-  temperatureColor: string;
-  salinityColor: string;
-  phColor: string;
-  oxygenColor: string;
-  turbidityColor: string;
-  nitrateColor: string;
+  threateningFactors: string;
+  suggestedActions: string;
+  waterTemperatureStatus: 'ideal' | 'caution' | 'highRisk';
+  salinityStatus: 'ideal' | 'caution' | 'dangerous';
+  pHLevelStatus: 'ideal' | 'concerning' | 'acidification';
+  dissolvedOxygenStatus: 'ideal' | 'warning' | 'hypoxia';
+  turbidityStatus: 'ideal' | 'reducedLight' | 'stressed';
+  nitrateStatus: 'ideal' | 'manageable' | 'suffocating';
 }
+
+const THEME_CONFIG = {
+  waterTemperature: {
+    label: 'Water Temperature (°C)',
+    color: 'hsl(var(--chart-1))',
+  },
+  salinity: {
+    label: 'Salinity (PSU)',
+    color: 'hsl(var(--chart-2))',
+  },
+  pHLevel: {
+    label: 'pH Level',
+    color: 'hsl(var(--chart-3))',
+  },
+  dissolvedOxygen: {
+    label: 'Dissolved Oxygen (mg/L)',
+    color: 'hsl(var(--chart-4))',
+  },
+  turbidity: {
+    label: 'Turbidity (NTU)',
+    color: 'hsl(var(--chart-5))',
+  },
+  nitrate: {
+    label: 'Nitrate (mg/L)',
+    color: 'hsl(var(--accent))',
+  },
+}
+
+const PARAMETER_STATUS_MAP = {
+  waterTemperature: {
+    ideal: 'text-green-500',
+    caution: 'text-yellow-500',
+    highRisk: 'text-red-500',
+  },
+  salinity: {
+    ideal: 'text-green-500',
+    caution: 'text-yellow-500',
+    dangerous: 'text-red-500',
+  },
+  pHLevel: {
+    ideal: 'text-green-500',
+    concerning: 'text-yellow-500',
+    acidification: 'text-red-500',
+  },
+  dissolvedOxygen: {
+    ideal: 'text-green-500',
+    warning: 'text-yellow-500',
+    hypoxia: 'text-red-500',
+  },
+  turbidity: {
+    ideal: 'text-green-500',
+    reducedLight: 'text-yellow-500',
+    stressed: 'text-red-500',
+  },
+  nitrate: {
+    ideal: 'text-green-500',
+    manageable: 'text-yellow-500',
+    suffocating: 'text-red-500',
+  },
+};
 
 interface SensorData {
   time: string;
@@ -51,47 +107,130 @@ interface SensorData {
   waterTemperature: number;
   salinity: number;
   pHLevel: number;
-  pHLevelColor: string;
-  oxygenColor: string;
   dissolvedOxygen: number;
   turbidity: number;
-  turbidityColor: string;
   nitrate: number;
 }
 
-const Home = () => {
-  const [sensorData, setSensorData] = useState('');
+export default function Home() {
+  const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [model, setModel] = useState<tf.Sequential | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
 
-  // Define color-coded thresholds for each parameter
-  const thresholds = defineSensorDataThresholds();
+  const analyzeData = useCallback(async () => {
+    setIsLoading(true);
+    setAnalysisProgress(0);
+    try {
+      const parsedData = parseData(sensorData);
+      if (!parsedData || parsedData.length === 0) {
+        alert('No valid sensor data found. Please check the format.');
+        return;
+      }
 
-  useEffect(() => {
-    // Load TensorFlow.js only on the client-side
-    import('@tensorflow/tfjs')
-      .then(tf => {
-        console.log('TensorFlow.js loaded successfully.');
-      })
-      .catch(err => {
-        console.error('Failed to load TensorFlow.js:', err);
-        setError('Failed to load TensorFlow.js. Please check your network connection.');
-      });
-  }, []);
+      const trainedModel = await trainModel(parsedData);
+      setModel(trainedModel);
+
+      const predictedData = await predictData(trainedModel, parsedData);
+      const totalSteps = predictedData.length;
+
+      const detailedAnalysis = await Promise.all(
+        predictedData.map(async (data, index) => {
+          const {
+            isSuitable,
+            threateningFactors,
+            suggestedActions,
+            waterTemperatureStatus,
+            salinityStatus,
+            pHLevelStatus,
+            dissolvedOxygenStatus,
+            turbidityStatus,
+            nitrateStatus,
+          } = await analyzeSensorData(data);
+
+          const progress = ((index + 1) / totalSteps) * 100;
+          setAnalysisProgress(progress);
+
+          return {
+            ...data,
+            isSuitable,
+            threateningFactors,
+            suggestedActions,
+            waterTemperatureStatus,
+            salinityStatus,
+            pHLevelStatus,
+            dissolvedOxygenStatus,
+            turbidityStatus,
+            nitrateStatus,
+          };
+        })
+      );
+
+      setAnalysisResults(detailedAnalysis);
+    } catch (error) {
+      console.error('Error during data analysis:', error);
+      alert('An error occurred during data analysis. Please try again.');
+    } finally {
+      setIsLoading(false);
+      setAnalysisProgress(0);
+    }
+  }, [sensorData]);
+
+  const parseData = (data: string): SensorData[] | null => {
+    // Splitting by newline to separate entries
+    return data.split('\n').slice(1).map(entry => { // Skip the header row
+      const parts = entry.split(',').map(item => item.trim());
+      if (parts.length !== 8) {
+        return null; // Skip incomplete entries
+      }
+
+      const [
+        time,
+        location,
+        waterTemperatureStr,
+        salinityStr,
+        pHLevelStr,
+        dissolvedOxygenStr,
+        turbidityStr,
+        nitrateStr
+      ] = parts;
+
+      const waterTemperature = parseFloat(waterTemperatureStr);
+      const salinity = parseFloat(salinityStr);
+      const pHLevel = parseFloat(pHLevelStr);
+      const dissolvedOxygen = parseFloat(dissolvedOxygenStr);
+      const turbidity = parseFloat(turbidityStr);
+      const nitrate = parseFloat(nitrateStr);
+
+      if (
+        isNaN(waterTemperature) ||
+        isNaN(salinity) ||
+        isNaN(pHLevel) ||
+        isNaN(dissolvedOxygen) ||
+        isNaN(turbidity) ||
+        isNaN(nitrate)
+      ) {
+        return null;
+      }
+
+      return {
+        time,
+        location,
+        waterTemperature,
+        salinity,
+        pHLevel,
+        dissolvedOxygen,
+        turbidity,
+        nitrate,
+      };
+    }).filter((item): item is SensorData => item !== null);
+  };
 
   const trainModel = async (data: SensorData[]) => {
-    if (!tf) {
-      console.error('TensorFlow.js is not available.');
-      setError('TensorFlow.js is not available. Please try again.');
-      return null;
-    }
-
     const numRecords = data.length;
     const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
-
+  
     // Prepare data for TensorFlow.js
     const temperatures = data.map(item => item.waterTemperature);
     const salinity = data.map(item => item.salinity);
@@ -99,257 +238,215 @@ const Home = () => {
     const dissolvedOxygen = data.map(item => item.dissolvedOxygen);
     const turbidity = data.map(item => item.turbidity);
     const nitrate = data.map(item => item.nitrate);
-
+  
     const inputTensor = tf.tensor2d(
       [temperatures, salinity, phLevels, dissolvedOxygen, turbidity, nitrate],
       [numFeatures, numRecords],
     ).transpose();
-
+  
     // Define a simple sequential model
     const model = tf.sequential();
     model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
     model.add(tf.layers.dense({units: 32, activation: 'relu'}));
     model.add(tf.layers.dense({units: numFeatures}));
-
+  
     // Compile the model
     model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
-
+  
     // Train the model
     await model.fit(inputTensor, inputTensor, {epochs: 100});
-
+  
     return model;
   };
 
-  const parseData = (data: string) => {
-    // Splitting by newline to separate entries
-    return data.split('\n').slice(1).map(entry => { // Skip the header row
-      const parts = entry.split(',').map(item => item.trim());
-      if (parts.length < 8) {
-        return null; // Skip incomplete entries
-      }
+  const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
+    const numPredictions = 5;
+    let predictedData: SensorData[] = [];
+    let data = [...initialData]; // Start with initial data
 
-      const [time, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
-
-      if (!time || !location || !waterTemperature || !salinity || !pHLevel || !dissolvedOxygen || !turbidity || !nitrate) {
-        return null;
-      }
-
-      return {
-        time,
-        location,
-        waterTemperature: parseFloat(waterTemperature),
-        salinity: parseFloat(salinity),
-        pHLevel: parseFloat(pHLevel),
-        dissolvedOxygen: parseFloat(dissolvedOxygen),
-        turbidity: parseFloat(turbidity),
-        nitrate: parseFloat(nitrate),
-        pHLevelColor: '',
-        oxygenColor: '',
-        turbidityColor: '',
+    for (let i = 0; i < numPredictions; i++) {
+      const lastRecord = data[data.length - 1];
+  
+      // Prepare the input tensor using the data from the last prediction
+      const inputTensor = tf.tensor2d(
+        [
+          [
+            lastRecord.waterTemperature,
+            lastRecord.salinity,
+            lastRecord.pHLevel,
+            lastRecord.dissolvedOxygen,
+            lastRecord.turbidity,
+            lastRecord.nitrate,
+          ],
+        ],
+        [1, 6]
+      );
+  
+      // Generate predictions
+      const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
+      const predictedValues = await predictions.data();
+  
+      const predictionTime = `P${i + 1}`; // Predicted Time
+  
+      const newRecord: SensorData = {
+        time: predictionTime,
+        location: lastRecord.location,
+        waterTemperature: predictedValues[0] + (Math.random() - 0.5) * 0.1,
+        salinity: predictedValues[1] + (Math.random() - 0.5) * 0.1,
+        pHLevel: predictedValues[2] + (Math.random() - 0.5) * 0.01,
+        dissolvedOxygen: predictedValues[3] + (Math.random() - 0.5) * 0.1,
+        turbidity: predictedValues[4] + (Math.random() - 0.5) * 0.05,
+        nitrate: predictedValues[5] + (Math.random() - 0.5) * 0.01,
       };
-    }).filter(Boolean) as SensorData[];
-  };
-
-  const handleAnalyze = async () => {
-    setError(null);
-    setLoading(true);
-    setProgress(0);
-    setAnalysisResults([]);
-
-    try {
-      const parsedData = parseData(sensorData);
-      if (!parsedData || parsedData.length === 0) {
-        setError('No valid data found. Please check your input format.');
-        setLoading(false);
-        return;
-      }
-
-      const trainedModel = await trainModel(parsedData);
-      if (!trainedModel) {
-        setError('Failed to train the model.');
-        setLoading(false);
-        return;
-      }
-      setModel(trainedModel);
-
-      const newResults: AnalysisResult[] = [];
-      let allChartData = [...newResults];
-
-      for (let i = 0; i < parsedData.length; i++) {
-        const data = parsedData[i];
-        const {isSuitable, summary, temperatureColor, salinityColor, phColor, oxygenColor, turbidityColor, nitrateColor, improvements} = analyzeSensorData(data, thresholds);
-
-        const analysisResult: AnalysisResult = {
-          time: data.time,
-          location: data.location,
-          waterTemperature: data.waterTemperature,
-          salinity: data.salinity,
-          pHLevel: data.pHLevel,
-          dissolvedOxygen: data.dissolvedOxygen,
-          turbidity: data.turbidity,
-          nitrate: data.nitrate,
-          isSuitable,
-          summary,
-          improvements,
-          temperatureColor,
-          salinityColor,
-          phColor,
-          oxygenColor,
-          turbidityColor,
-          nitrateColor,
-        };
-        newResults.push(analysisResult);
-        allChartData.push(analysisResult);
-
-        setProgress((i + 1) / parsedData.length * 100);
-        await new Promise(resolve => setTimeout(resolve, 10)); // brief pause
-      }
-      setAnalysisResults(newResults);
-
-      // Predict future data points using TensorFlow.js model
-      if (trainedModel && parsedData.length > 0) {
-        const numPredictions = 5;
-         // Use the last available record for prediction as initial input
-        let previousRecord = parsedData[parsedData.length - 1];
-
-        for (let i = 0; i < numPredictions; i++) {
-          // Prepare the input tensor using the last record's data
-          const inputTensor = tf.tensor2d(
-            [
-              [
-                previousRecord.waterTemperature,
-                previousRecord.salinity,
-                previousRecord.pHLevel,
-                previousRecord.dissolvedOxygen,
-                previousRecord.turbidity,
-                previousRecord.nitrate,
-              ],
-            ],
-            [1, 6]
-          );
-
-          // Generate predictions
-          const predictions = trainedModel.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-          const predictedValues = await predictions.data();
-
-          // Adding slight variations to the predicted values
-          const predictedWaterTemperature = predictedValues[0] + (Math.random() - 0.5) * 0.1;
-          const predictedSalinity = predictedValues[1] + (Math.random() - 0.5) * 0.1;
-          const predictedPHLevel = predictedValues[2] + (Math.random() - 0.5) * 0.01;
-          const predictedDissolvedOxygen = predictedValues[3] + (Math.random() - 0.5) * 0.1;
-          const predictedTurbidity = predictedValues[4] + (Math.random() - 0.5) * 0.05;
-          const predictedNitrate = predictedValues[5] + (Math.random() - 0.5) * 0.01;
-
-          const predictionTime = `P${i + 1}`;
-          const predictedData: SensorData = {
-            time: predictionTime,
-            location: "Prediction",
-            waterTemperature: predictedWaterTemperature,
-            salinity: predictedSalinity,
-            pHLevel: predictedPHLevel,
-            dissolvedOxygen: predictedDissolvedOxygen,
-            turbidity: predictedTurbidity,
-            nitrate: predictedNitrate,
-            pHLevelColor: '',
-            oxygenColor: '',
-            turbidityColor: '',
-          };
-
-          const {isSuitable: predictedIsSuitable, summary: predictedSummary, temperatureColor: predictedTemperatureColor, salinityColor: predictedSalinityColor, phColor: predictedPhColor, oxygenColor: predictedOxygenColor, turbidityColor: predictedTurbidityColor, nitrateColor: predictedNitrateColor, improvements: predictedImprovements} = analyzeSensorData(predictedData, thresholds);
-
-          const predictedAnalysisResult: AnalysisResult = {
-            time: predictedData.time,
-            location: predictedData.location,
-            waterTemperature: predictedData.waterTemperature,
-            salinity: predictedData.salinity,
-            pHLevel: predictedData.pHLevel,
-            dissolvedOxygen: predictedData.dissolvedOxygen,
-            turbidity: predictedData.turbidity,
-            nitrate: predictedData.nitrate,
-            isSuitable: predictedIsSuitable,
-            summary: predictedSummary,
-            improvements: predictedImprovements,
-            temperatureColor: predictedTemperatureColor,
-            salinityColor: predictedSalinityColor,
-            phColor: predictedPhColor,
-            oxygenColor: predictedOxygenColor,
-            turbidityColor: predictedTurbidityColor,
-            nitrateColor: predictedNitrateColor,
-          };
-
-          allChartData.push(predictedAnalysisResult);
-          //Next Prediction Input is Based on Previous Prediction Output
-          previousRecord = predictedData;
-        }
-        setAnalysisResults(allChartData);
-      }
-    } catch (e: any) {
-      console.error("Analysis failed:", e);
-      setError(`Analysis failed: ${e.message}`);
-    } finally {
-      setLoading(false);
+  
+      predictedData.push(newRecord);
+      data = [...data, newRecord]; // Update data for the next prediction
     }
+  
+    return [...initialData, ...predictedData];
   };
+
+  const defineSensorDataThresholds = () => ({
+    temperatureIdeal: [24, 28],
+    temperatureCaution: [28, 30],
+    salinityIdeal: [33, 36],
+    salinityCaution: [31, 33, 36, 38],
+    pHLevelIdeal: [8.0, 8.3],
+    pHLevelCaution: [7.8, 8.0],
+    dissolvedOxygenIdeal: 6.0,
+    dissolvedOxygenCaution: [4.0, 6.0],
+    turbidityIdeal: 1.0,
+    turbidityCaution: [1.0, 3.0],
+    nitrateIdeal: 0.1,
+    nitrateCaution: [0.1, 0.3],
+  });
+
+  const analyzeSensorData = async (data: SensorData) => {
+    const thresholds = defineSensorDataThresholds();
+
+    const waterTemperatureStatus =
+      data.waterTemperature >= thresholds.temperatureIdeal[0] && data.waterTemperature <= thresholds.temperatureIdeal[1]
+        ? 'ideal'
+        : data.waterTemperature >= thresholds.temperatureCaution[0] && data.waterTemperature <= thresholds.temperatureCaution[1]
+          ? 'caution'
+          : 'highRisk';
+
+    const salinityStatus =
+      data.salinity >= thresholds.salinityIdeal[0] && data.salinity <= thresholds.salinityIdeal[1]
+        ? 'ideal'
+        : (data.salinity >= thresholds.salinityCaution[0] && data.salinity <= thresholds.salinityCaution[1]) ||
+          (data.salinity >= thresholds.salinityCaution[2] && data.salinity <= thresholds.salinityCaution[3])
+          ? 'caution'
+          : 'dangerous';
+
+    const pHLevelStatus =
+      data.pHLevel >= thresholds.pHLevelIdeal[0] && data.pHLevel <= thresholds.pHLevelIdeal[1]
+        ? 'ideal'
+        : data.pHLevel >= thresholds.pHLevelCaution[0] && data.pHLevel <= thresholds.pHLevelCaution[1]
+          ? 'concerning'
+          : 'acidification';
+
+    const dissolvedOxygenStatus =
+      data.dissolvedOxygen > thresholds.dissolvedOxygenIdeal
+        ? 'ideal'
+        : data.dissolvedOxygen >= thresholds.dissolvedOxygenCaution[0] && data.dissolvedOxygen <= thresholds.dissolvedOxygenCaution[1]
+          ? 'warning'
+          : 'hypoxia';
+
+    const turbidityStatus =
+      data.turbidity < thresholds.turbidityIdeal
+        ? 'ideal'
+        : data.turbidity >= thresholds.turbidityCaution[0] && data.turbidity <= thresholds.turbidityCaution[1]
+          ? 'reducedLight'
+          : 'stressed';
+
+    const nitrateStatus =
+      data.nitrate < thresholds.nitrateIdeal
+        ? 'ideal'
+        : data.nitrate >= thresholds.nitrateCaution[0] && data.nitrate <= thresholds.nitrateCaution[1]
+          ? 'manageable'
+          : 'suffocating';
+
+    let threateningFactors = '';
+    if (waterTemperatureStatus === 'highRisk') threateningFactors += 'High water temperature, ';
+    if (salinityStatus === 'dangerous') threateningFactors += 'Dangerous salinity levels, ';
+    if (pHLevelStatus === 'acidification') threateningFactors += 'Acidification stress, ';
+    if (dissolvedOxygenStatus === 'hypoxia') threateningFactors += 'Hypoxia (low dissolved oxygen), ';
+    if (turbidityStatus === 'stressed') threateningFactors += 'High turbidity, ';
+    if (nitrateStatus === 'suffocating') threateningFactors += 'High nitrate concentrations, ';
+
+    if (threateningFactors === '') {
+      threateningFactors = 'None';
+    } else {
+      threateningFactors = threateningFactors.slice(0, -2);
+    }
+
+    const defaultActions = {
+      highRisk: 'Reduce thermal stress by providing shade or cooling the water. Consider relocating corals to a cooler environment.',
+      dangerous: 'Adjust salinity by controlling freshwater input or increasing water circulation. Implement desalination or dilute with ocean water.',
+      acidification: 'Introduce buffering agents to increase pH. Reduce CO2 emissions and local pollution sources.',
+      hypoxia: 'Aerate the water or increase oxygen production through planting aquatic vegetation. Reduce organic waste input.',
+      stressed: 'Reduce sediment input from construction, dredging, and agriculture. Use silt curtains and erosion control measures.',
+      suffocating: 'Control nutrient runoff from agriculture and sewage. Implement advanced wastewater treatment and reduce fertilizer use.',
+    };
+
+    let suggestedActions = '';
+    if (waterTemperatureStatus === 'highRisk') suggestedActions += defaultActions.highRisk + ' ';
+    if (salinityStatus === 'dangerous') suggestedActions += defaultActions.dangerous + ' ';
+    if (pHLevelStatus === 'acidification') suggestedActions += defaultActions.acidification + ' ';
+    if (dissolvedOxygenStatus === 'hypoxia') suggestedActions += defaultActions.hypoxia + ' ';
+    if (turbidityStatus === 'stressed') suggestedActions += defaultActions.stressed + ' ';
+    if (nitrateStatus === 'suffocating') suggestedActions += defaultActions.suffocating + ' ';
+
+    const isSuitable = threateningFactors === 'None';
+
+    return {
+      isSuitable,
+      threateningFactors,
+      suggestedActions,
+      waterTemperatureStatus,
+      salinityStatus,
+      pHLevelStatus,
+      dissolvedOxygenStatus,
+      turbidityStatus,
+      nitrateStatus,
+    };
+  };
+
+  const thresholds = defineSensorDataThresholds();
 
   return (
     
       
-
-      
-
-      
         
           
             
-              <Avatar>
-                <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
-                <AvatarFallback>CS</AvatarFallback>
-              </Avatar>
+              <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
+              <AvatarFallback>CS</AvatarFallback>
+            
+            
               CoralSafe: Sensor Data Analyzer
             
           
         
         
           Sensor Data Input
-          
-            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
-          
-          
-            <Textarea
-              placeholder="Paste sensor data here"
-              value={sensorData}
-              onChange={(e) => setSensorData(e.target.value)}
-            />
-          
+        
+        Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
         
         
-          
-            Analyze Data
-          
+          <Textarea
+            placeholder="Paste sensor data here"
+            value={sensorData}
+            onChange={(e) => setSensorData(e.target.value)}
+          />
         
-
-        {error && (
+        
+          Analyze Sensor Data
+        
+        {isLoading && (
           
-            
-              
-                
-                  Error
-                
-              
-              
-                {error}
-              
-            
-          
-        )}
-
-        {loading && (
-          
-            Analyzing Data:
-            
-              
-            
-            {progress.toFixed(1)}%
+            Analyzing Data... {analysisProgress.toFixed(2)}%
           
         )}
 
@@ -357,72 +454,41 @@ const Home = () => {
           
             
               
-              
-                
-                  Time
-                
-                
-                  Location
-                
-                
-                  Suitability
-                
-                
-                  Water Temperature (°C)
-                
-                
-                  Salinity (PSU)
-                
-                
-                  pH Level
-                
-                
-                  Dissolved Oxygen (mg/L)
-                
-                
-                  Turbidity (NTU)
-                
-                
-                  Nitrate (mg/L)
-                
-                
-                  Summary
-                
-                
-                  Improvements
-                
+                Time
+                Location
+                Suitability
+                Water Temperature
+                Salinity
+                pH Level
+                Dissolved Oxygen
+                Turbidity
+                Nitrate
+                Improvements
               
             
             
               {analysisResults.map((result, index) => (
                 
                   
-                    
-                      {result.time}
-                    
+                    {result.time}
                   
                   
-                    
-                      {result.location}
-                    
+                    {result.location}
                   
                   
-                    
-                      {result.isSuitable === null ? (
-                        
-                          
-                            Not Available
-                          
-                      ) : result.isSuitable ? (
-                        
-                          Suitable
-                        
-                      ) : (
-                        
-                          Threatening
-                        
-                      )}
-                    
+                    {result.isSuitable === null ? (
+                      
+                        Analyzing...
+                      
+                    ) : result.isSuitable ? (
+                      
+                        Suitable
+                      
+                    ) : (
+                      
+                        Threatening
+                      
+                    )}
                   
                   
                     
@@ -457,20 +523,19 @@ const Home = () => {
                   
                     
                       
-                        {result.summary}
+                        
+                          Threatening Factors
+                        
+                        
+                          {result.threateningFactors}
+                        
                       
-                    
-                  
-                  
-                    
                       
                         
-                          
-                            
-                              
-                            
-                            {result.improvements}
-                          
+                          Suggested Actions
+                        
+                        
+                          {result.suggestedActions}
                         
                       
                     
@@ -478,65 +543,46 @@ const Home = () => {
                 
               ))}
             
+            
+              
+                This table presents a detailed analysis of sensor data, providing insights into coral reef suitability and suggested actions for improvement.
+              
+            
           
         )}
-
-        
-          {['waterTemperature', 'salinity', 'pHLevel', 'dissolvedOxygen', 'turbidity', 'nitrate'].map(name => (
+      
+      
+        {Object.keys(THEME_CONFIG).map((name) => (
+          
             
-              
-                
-                  {`${name} Over Time`}
-                
-              
-              
-                {`Trends of ${name} over time, including predictions.`}
-              
+              {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time
             
             
-              {analysisResults.length > 0 ? (
-                <ChartContainer
-                  config={{
-                    "waterTemperature": {label: "Water Temperature (°C)"},
-                    "salinity": {label: "Salinity (PSU)"},
-                    "pHLevel": {label: "pH Level"},
-                    "dissolvedOxygen": {label: "Dissolved Oxygen (mg/L)"},
-                    "turbidity": {label: "Turbidity (NTU)"},
-                    "nitrate": {label: "Nitrate (mg/L)"},
-                  }}
-                >
-                  
-                    
-                      
-                        
-                          key={index}
-                          dataKey="time"
-                          name="Time"
-                        
-                      
-                      
-                        
-                          key="waterTemperature"
-                          type="monotone"
-                          dataKey="waterTemperature"
-                          stroke="#8884d8"
-                          name="Water Temperature"
-                        
-                      
-                    
-                  
-                </ChartContainer>
-              ) : (
-                
-                  No data to display. Please analyze sensor data.
-                
-              )}
+              Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
             
           
-        ))}
+          
+            
+              <ChartTooltip>
+                
+              </ChartTooltip>
+              
+            
+              <Chart.Line
+                name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                dataKey={name}
+                stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
+                strokeWidth={2}
+                dot={true}
+                isAnimationActive={false}
+              />
+            
+          
+        
+      )}
       
     
   );
-};
+}
 
-export default Home;
+
