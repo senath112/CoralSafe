@@ -19,6 +19,7 @@ import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import {Avatar, AvatarImage, AvatarFallback} from "@/components/ui/avatar";
 import * as tf from '@tensorflow/tfjs';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 interface AnalysisResult {
   time: string;
@@ -416,9 +417,7 @@ export default function Home() {
               
                 
                   <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
-                  
-                    CoralSafe: Sensor Data Analyzer
-                  
+                  <span>CoralSafe: Sensor Data Analyzer</span>
                 
               
             
@@ -605,4 +604,3 @@ export default function Home() {
     
   );
 }
-
