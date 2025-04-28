@@ -332,6 +332,64 @@ export default function Home() {
     }
   };
 
+  const getParameterColor = (parameter: string, value: number): string => {
+    switch (parameter) {
+      case 'waterTemperature':
+        if (value >= thresholds.temperatureIdeal[0] && value <= thresholds.temperatureIdeal[1]) {
+          return 'green';
+        } else if (value >= thresholds.temperatureCaution[0] && value <= thresholds.temperatureCaution[1]) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      case 'salinity':
+        if (value >= thresholds.salinityIdeal[0] && value <= thresholds.salinityIdeal[1]) {
+          return 'green';
+        } else if (
+          (value >= thresholds.salinityCaution[0] && value <= thresholds.salinityCaution[1]) ||
+          (value >= thresholds.salinityCaution[2] && value <= thresholds.salinityCaution[3])
+        ) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      case 'pHLevel':
+        if (value >= thresholds.pHIdeal[0] && value <= thresholds.pHIdeal[1]) {
+          return 'green';
+        } else if (value >= thresholds.pHCaution[0] && value <= thresholds.pHCaution[1]) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      case 'dissolvedOxygen':
+        if (value > thresholds.oxygenIdeal) {
+          return 'green';
+        } else if (value >= thresholds.oxygenCaution[0] && value <= thresholds.oxygenCaution[1]) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      case 'turbidity':
+        if (value <= thresholds.turbidityIdeal) {
+          return 'green';
+        } else if (value >= thresholds.turbidityCaution[0] && value <= thresholds.turbidityCaution[1]) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      case 'nitrate':
+        if (value <= thresholds.nitrateIdeal) {
+          return 'green';
+        } else if (value >= thresholds.nitrateCaution[0] && value <= thresholds.nitrateCaution[1]) {
+          return 'yellow';
+        } else {
+          return 'red';
+        }
+      default:
+        return 'black';
+    }
+  };
+
   const renderChart = (data: any[], dataKey: string, name: string, strokeColor: string) => (
     <Card>
       <CardHeader>
@@ -440,12 +498,12 @@ export default function Home() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-2">{result.waterTemperature}</TableCell>
-                      <TableCell className="py-2">{result.salinity}</TableCell>
-                      <TableCell className="py-2">{result.pHLevel}</TableCell>
-                      <TableCell className="py-2">{result.dissolvedOxygen}</TableCell>
-                      <TableCell className="py-2">{result.turbidity}</TableCell>
-                      <TableCell className="py-2">{result.nitrate}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('waterTemperature', parseFloat(result.waterTemperature))}}>{result.waterTemperature}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('salinity', parseFloat(result.salinity))}}>{result.salinity}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('pHLevel', parseFloat(result.pHLevel))}}>{result.pHLevel}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('dissolvedOxygen', parseFloat(result.dissolvedOxygen))}}>{result.dissolvedOxygen}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('turbidity', parseFloat(result.turbidity))}}>{result.turbidity}</TableCell>
+                      <TableCell className="py-2" style={{backgroundColor: getParameterColor('nitrate', parseFloat(result.nitrate))}}>{result.nitrate}</TableCell>
                        <TableCell className="py-2">
                         {result.summary ? (
                           <Accordion type="single" collapsible>
@@ -517,3 +575,4 @@ export default function Home() {
     </div>
   );
 }
+
