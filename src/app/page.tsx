@@ -51,8 +51,11 @@ interface SensorData {
   waterTemperature: number;
   salinity: number;
   pHLevel: number;
+  pHLevelColor: string;
+  oxygenColor: string;
   dissolvedOxygen: number;
   turbidity: number;
+  turbidityColor: string;
   nitrate: number;
 }
 
@@ -118,10 +121,11 @@ const Home = () => {
   };
 
   const parseData = (data: string) => {
-    return data.split('\n').slice(1).map(entry => {
+    // Splitting by newline to separate entries
+    return data.split('\n').slice(1).map(entry => { // Skip the header row
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length < 8) {
-        return null;
+        return null; // Skip incomplete entries
       }
 
       const [time, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
@@ -139,6 +143,9 @@ const Home = () => {
         dissolvedOxygen: parseFloat(dissolvedOxygen),
         turbidity: parseFloat(turbidity),
         nitrate: parseFloat(nitrate),
+        pHLevelColor: '',
+        oxygenColor: '',
+        turbidityColor: '',
       };
     }).filter(Boolean) as SensorData[];
   };
@@ -243,6 +250,9 @@ const Home = () => {
             dissolvedOxygen: predictedDissolvedOxygen,
             turbidity: predictedTurbidity,
             nitrate: predictedNitrate,
+            pHLevelColor: '',
+            oxygenColor: '',
+            turbidityColor: '',
           };
 
           const {isSuitable: predictedIsSuitable, summary: predictedSummary, temperatureColor: predictedTemperatureColor, salinityColor: predictedSalinityColor, phColor: predictedPhColor, oxygenColor: predictedOxygenColor, turbidityColor: predictedTurbidityColor, nitrateColor: predictedNitrateColor, improvements: predictedImprovements} = analyzeSensorData(predictedData, thresholds);
@@ -295,7 +305,7 @@ const Home = () => {
                 <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" />
                 <AvatarFallback>CS</AvatarFallback>
               </Avatar>
-              {"CoralSafe: Sensor Data Analyzer"}
+              CoralSafe: Sensor Data Analyzer
             
           
         
@@ -480,7 +490,7 @@ const Home = () => {
                 
               
               
-                Trends of {name} over time, including predictions.
+                {`Trends of ${name} over time, including predictions.`}
               
             
             
