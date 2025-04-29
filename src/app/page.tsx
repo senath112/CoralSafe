@@ -11,7 +11,6 @@ import {
   TableRow,
   TableHead,
   TableCell,
-  TableCaption,
 } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from "@/components/ui/progress";
@@ -114,6 +113,21 @@ interface SensorData {
   nitrate: number;
 }
 
+const defineSensorDataThresholds = () => ({
+  temperatureIdeal: [24, 28],
+  temperatureCaution: [28, 30],
+  salinityIdeal: [33, 36],
+  salinityCaution: [31, 33, 36, 38],
+  pHLevelIdeal: [8.0, 8.3],
+  pHLevelCaution: [7.8, 8.0],
+  dissolvedOxygenIdeal: 6.0,
+  dissolvedOxygenCaution: [4.0, 6.0],
+  turbidityIdeal: 1.0,
+  turbidityCaution: [1.0, 3.0],
+  nitrateIdeal: 0.1,
+  nitrateCaution: [0.1, 0.3],
+});
+
 export default function Home() {
   const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
@@ -122,6 +136,8 @@ export default function Home() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
+  const [parameterRanges] = useState(defineSensorDataThresholds()); // Store ranges
+
 
   const analyzeData = useCallback(async () => {
     setIsLoading(true);
@@ -187,6 +203,7 @@ export default function Home() {
     return data.split('\n').slice(1).map(entry => { // Skip the header row
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== 8) {
+        console.warn('Skipping incomplete entry:', entry);
         return null; // Skip incomplete entries
       }
 
@@ -216,6 +233,7 @@ export default function Home() {
         isNaN(turbidity) ||
         isNaN(nitrate)
       ) {
+         console.warn('Skipping entry with invalid numeric data:', entry);
         return null;
       }
 
@@ -264,62 +282,49 @@ export default function Home() {
     return model;
   };
 
-  const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
-    let data = [...initialData]; // Start with initial data
-    const numPredictions = 5;
+ const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
+  let data = [...initialData]; // Start with initial data
+  const numPredictions = 5;
+  const numFeatures = 6;
 
-    for (let i = 0; i < numPredictions; i++) {
-      // Prepare the input tensor using all available data for the current prediction
-      const currentDataForPrediction = data.map(record => [
-        record.waterTemperature,
-        record.salinity,
-        record.pHLevel,
-        record.dissolvedOxygen,
-        record.turbidity,
-        record.nitrate,
-      ]);
-      const inputTensor = tf.tensor2d(
-        currentDataForPrediction,
-        [data.length, 6]
-      );
+  for (let i = 0; i < numPredictions; i++) {
+    // Prepare the input tensor using all currently available data
+    const currentDataForPrediction = data.map(record => [
+      record.waterTemperature,
+      record.salinity,
+      record.pHLevel,
+      record.dissolvedOxygen,
+      record.turbidity,
+      record.nitrate,
+    ]);
+    const inputTensor = tf.tensor2d(
+      currentDataForPrediction,
+      [data.length, numFeatures]
+    );
 
-      // Generate predictions
-      const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-      const predictedValues = await predictions.data();
+    // Generate predictions based on all previous data
+    const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
+    const allPredictedValues = await predictions.array(); // Get all predictions as array
 
-      // Use the last prediction for the new record
-      const lastPredictedIndex = (data.length - 1) * 6;
-      const newRecord: SensorData = {
-        time: `P${i + 1}`,
-        location: data[0].location, // Use the location from the initial data
-        waterTemperature: predictedValues[lastPredictedIndex + 0] + (Math.random() - 0.5) * 0.1,
-        salinity: predictedValues[lastPredictedIndex + 1] + (Math.random() - 0.5) * 0.1,
-        pHLevel: predictedValues[lastPredictedIndex + 2] + (Math.random() - 0.5) * 0.01,
-        dissolvedOxygen: predictedValues[lastPredictedIndex + 3] + (Math.random() - 0.5) * 0.1,
-        turbidity: predictedValues[lastPredictedIndex + 4] + (Math.random() - 0.5) * 0.05,
-        nitrate: predictedValues[lastPredictedIndex + 5] + (Math.random() - 0.5) * 0.01,
-      };
+    // Use the prediction corresponding to the last input record for the new record
+    const lastPredictedValues = allPredictedValues[allPredictedValues.length - 1];
 
-      data.push(newRecord); // Add the new record to the data array
-    }
+    const newRecord: SensorData = {
+      time: `P${i + 1}`,
+      location: data[0]?.location || 'Predicted', // Use location from the first record or default
+      waterTemperature: lastPredictedValues[0] + (Math.random() - 0.5) * 0.1,
+      salinity: lastPredictedValues[1] + (Math.random() - 0.5) * 0.1,
+      pHLevel: lastPredictedValues[2] + (Math.random() - 0.5) * 0.01,
+      dissolvedOxygen: lastPredictedValues[3] + (Math.random() - 0.5) * 0.1,
+      turbidity: lastPredictedValues[4] + (Math.random() - 0.5) * 0.05,
+      nitrate: lastPredictedValues[5] + (Math.random() - 0.5) * 0.01,
+    };
 
-    return data;
-  };
+    data.push(newRecord); // Add the new record to the data array for the next prediction cycle
+  }
 
-  const defineSensorDataThresholds = () => ({
-    temperatureIdeal: [24, 28],
-    temperatureCaution: [28, 30],
-    salinityIdeal: [33, 36],
-    salinityCaution: [31, 33, 36, 38],
-    pHLevelIdeal: [8.0, 8.3],
-    pHLevelCaution: [7.8, 8.0],
-    dissolvedOxygenIdeal: 6.0,
-    dissolvedOxygenCaution: [4.0, 6.0],
-    turbidityIdeal: 1.0,
-    turbidityCaution: [1.0, 3.0],
-    nitrateIdeal: 0.1,
-    nitrateCaution: [0.1, 0.3],
-  });
+  return data; // Return the combined original and predicted data
+};
 
   const analyzeSensorData = async (data: SensorData) => {
     const thresholds = defineSensorDataThresholds();
@@ -375,7 +380,7 @@ export default function Home() {
     if (turbidityStatus === 'stressed') threateningFactors += 'High turbidity, ';
     if (nitrateStatus === 'suffocating') threateningFactors += 'High nitrate concentrations, ';
 
-    // Include caution levels as threatening if they are outside ideal range
+    // Only add caution levels if they are not ideal.
     if (waterTemperatureStatus === 'caution') threateningFactors += 'Caution: Water temperature outside ideal range, ';
     if (salinityStatus === 'caution') threateningFactors += 'Caution: Salinity outside ideal range, ';
     if (pHLevelStatus === 'concerning') threateningFactors += 'Caution: pH Level outside ideal range, ';
@@ -420,13 +425,16 @@ export default function Home() {
     else if (nitrateStatus === 'manageable') suggestedActions += defaultActions.caution + ' ';
 
 
-    const isSuitable =
-      waterTemperatureStatus === 'ideal' &&
-      salinityStatus === 'ideal' &&
-      pHLevelStatus === 'ideal' &&
-      dissolvedOxygenStatus === 'ideal' &&
-      turbidityStatus === 'ideal' &&
-      nitrateStatus === 'ideal';
+    // Determine suitability based ONLY on whether any parameter is in a high-risk/dangerous state.
+    // Caution states do not automatically make it unsuitable.
+    const isSuitable = !(
+      waterTemperatureStatus === 'highRisk' ||
+      salinityStatus === 'dangerous' ||
+      pHLevelStatus === 'acidification' ||
+      dissolvedOxygenStatus === 'hypoxia' ||
+      turbidityStatus === 'stressed' ||
+      nitrateStatus === 'suffocating'
+    );
 
 
     return {
@@ -520,6 +528,64 @@ export default function Home() {
           </CardContent>
         </Card>
 
+       {/* Parameter Ranges Card */}
+        <Card className="bg-card shadow-md rounded-md">
+          <CardHeader>
+            <CardTitle>Parameter Suitability Ranges</CardTitle>
+            <CardDescription>Ideal, Caution (Warning), and Threatening ranges for coral health.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table className="rounded-md shadow-md border">
+              <TableHeader>
+                <TableRow className="border-b">
+                  <TableHead className="text-left font-medium border-r">Parameter</TableHead>
+                  <TableHead className="text-center font-medium border-r"><span className="bg-green-100 text-green-500 rounded-full px-2 py-1">Ideal</span></TableHead>
+                  <TableHead className="text-center font-medium border-r"><span className="bg-yellow-100 text-yellow-500 rounded-full px-2 py-1">Caution/Warning</span></TableHead>
+                  <TableHead className="text-center font-medium"><span className="bg-red-100 text-red-500 rounded-full px-2 py-1">Threatening</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow className="border-b">
+                  <TableCell className="py-2 border-r">Water Temperature (°C)</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.temperatureIdeal[0]} - ${parameterRanges.temperatureIdeal[1]}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.temperatureCaution[0]} - ${parameterRanges.temperatureCaution[1]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`> ${parameterRanges.temperatureCaution[1]}`}</TableCell>
+                </TableRow>
+                <TableRow className="border-b">
+                  <TableCell className="py-2 border-r">Salinity (PSU)</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.salinityIdeal[0]} - ${parameterRanges.salinityIdeal[1]}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.salinityCaution[0]} - ${parameterRanges.salinityCaution[1]} or ${parameterRanges.salinityCaution[2]} - ${parameterRanges.salinityCaution[3]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`< ${parameterRanges.salinityCaution[0]} or > ${parameterRanges.salinityCaution[3]}`}</TableCell>
+                </TableRow>
+                <TableRow className="border-b">
+                  <TableCell className="py-2 border-r">pH Level</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.pHLevelIdeal[0]} - ${parameterRanges.pHLevelIdeal[1]}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.pHLevelCaution[0]} - ${parameterRanges.pHLevelCaution[1]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`< ${parameterRanges.pHLevelCaution[0]}`}</TableCell>
+                </TableRow>
+                 <TableRow className="border-b">
+                  <TableCell className="py-2 border-r">Dissolved Oxygen (mg/L)</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`> ${parameterRanges.dissolvedOxygenIdeal}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.dissolvedOxygenCaution[0]} - ${parameterRanges.dissolvedOxygenCaution[1]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`< ${parameterRanges.dissolvedOxygenCaution[0]}`}</TableCell>
+                </TableRow>
+                 <TableRow className="border-b">
+                  <TableCell className="py-2 border-r">Turbidity (NTU)</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`< ${parameterRanges.turbidityIdeal}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.turbidityCaution[0]} - ${parameterRanges.turbidityCaution[1]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`> ${parameterRanges.turbidityCaution[1]}`}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="py-2 border-r">Nitrate (mg/L)</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`< ${parameterRanges.nitrateIdeal}`}</TableCell>
+                  <TableCell className="text-center py-2 border-r">{`${parameterRanges.nitrateCaution[0]} - ${parameterRanges.nitrateCaution[1]}`}</TableCell>
+                  <TableCell className="text-center py-2">{`> ${parameterRanges.nitrateCaution[1]}`}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
         {analysisResults.length > 0 && (
           <Card className="bg-card shadow-md rounded-md">
             <CardHeader>
@@ -610,7 +676,7 @@ export default function Home() {
         )}
 
         {analysisResults.length > 0 && Object.keys(THEME_CONFIG).map((name) => (
-          <Accordion key={name} type="single" collapsible className="w-full">
+          <Accordion key={name} type="single" collapsible className="w-full" defaultValue={name}>
             <AccordionItem value={name}>
               <Card className="bg-card shadow-md rounded-md">
                 <AccordionTrigger className="w-full px-6 py-4">
@@ -647,8 +713,9 @@ export default function Home() {
                             stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
                             strokeDasharray="5 5" // Dashed line for prediction
                             name={`${THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} (Predicted)`}
-                            dot={{ stroke: THEME_CONFIG[name as keyof typeof THEME_CONFIG].color, strokeWidth: 1, r: 4, fill: '#fff' }} // Style predicted points
+                            dot={{ stroke: name === 'nitrate' ? 'hsl(var(--accent))' : THEME_CONFIG[name as keyof typeof THEME_CONFIG].color, strokeWidth: 1, r: 4, fill: name === 'nitrate' ? 'hsl(var(--accent))' : '#fff' }} // Style predicted points, special color for nitrate
                             connectNulls={false}
+                            data={analysisResults.filter(d => d.time.startsWith('P'))} // Only plot predicted points on this line
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -663,3 +730,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
