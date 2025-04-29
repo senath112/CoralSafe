@@ -20,6 +20,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface AnalysisResult {
   time: string;
@@ -38,7 +40,7 @@ interface AnalysisResult {
   pHLevelStatus: 'ideal' | 'concerning' | 'acidification';
   dissolvedOxygenStatus: 'ideal' | 'warning' | 'hypoxia';
   turbidityStatus: 'ideal' | 'reducedLight' | 'stressed';
-  nitrateStatus: 'ideal' | 'ideal' | 'manageable' | 'suffocating';
+  nitrateStatus: 'ideal' | 'manageable' | 'suffocating';
 }
 
 const THEME_CONFIG = {
@@ -117,15 +119,19 @@ export default function Home() {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [model, setModel] = useState<tf.Sequential | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
 
   const analyzeData = useCallback(async () => {
     setIsLoading(true);
     setAnalysisProgress(0);
+    setAnalysisResults([]); // Clear previous results
     try {
       const parsedData = parseData(sensorData);
       if (!parsedData || parsedData.length === 0) {
         alert('No valid sensor data found. Please check the format.');
+        setIsLoading(false);
         return;
       }
 
@@ -229,7 +235,7 @@ export default function Home() {
   const trainModel = async (data: SensorData[]) => {
     const numRecords = data.length;
     const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
-  
+
     // Prepare data for TensorFlow.js
     const temperatures = data.map(item => item.waterTemperature);
     const salinity = data.map(item => item.salinity);
@@ -237,64 +243,66 @@ export default function Home() {
     const dissolvedOxygen = data.map(item => item.dissolvedOxygen);
     const turbidity = data.map(item => item.turbidity);
     const nitrate = data.map(item => item.nitrate);
-  
+
     const inputTensor = tf.tensor2d(
       [temperatures, salinity, phLevels, dissolvedOxygen, turbidity, nitrate],
       [numFeatures, numRecords],
     ).transpose();
-  
+
     // Define a simple sequential model
     const model = tf.sequential();
     model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
     model.add(tf.layers.dense({units: 32, activation: 'relu'}));
     model.add(tf.layers.dense({units: numFeatures}));
-  
+
     // Compile the model
     model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
-  
+
     // Train the model
     await model.fit(inputTensor, inputTensor, {epochs: 100});
-  
+
     return model;
   };
 
   const predictData = async (model: tf.Sequential, initialData: SensorData[]): Promise<SensorData[]> => {
     let data = [...initialData]; // Start with initial data
     const numPredictions = 5;
-  
+
     for (let i = 0; i < numPredictions; i++) {
       // Prepare the input tensor using all available data for the current prediction
+      const currentDataForPrediction = data.map(record => [
+        record.waterTemperature,
+        record.salinity,
+        record.pHLevel,
+        record.dissolvedOxygen,
+        record.turbidity,
+        record.nitrate,
+      ]);
       const inputTensor = tf.tensor2d(
-        data.map(record => [
-          record.waterTemperature,
-          record.salinity,
-          record.pHLevel,
-          record.dissolvedOxygen,
-          record.turbidity,
-          record.nitrate,
-        ]),
+        currentDataForPrediction,
         [data.length, 6]
       );
-  
+
       // Generate predictions
       const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
       const predictedValues = await predictions.data();
-  
+
       // Use the last prediction for the new record
+      const lastPredictedIndex = (data.length - 1) * 6;
       const newRecord: SensorData = {
         time: `P${i + 1}`,
         location: data[0].location, // Use the location from the initial data
-        waterTemperature: predictedValues[(data.length - 1) * 6 + 0] + (Math.random() - 0.5) * 0.1,
-        salinity: predictedValues[(data.length - 1) * 6 + 1] + (Math.random() - 0.5) * 0.1,
-        pHLevel: predictedValues[(data.length - 1) * 6 + 2] + (Math.random() - 0.5) * 0.01,
-        dissolvedOxygen: predictedValues[(data.length - 1) * 6 + 3] + (Math.random() - 0.5) * 0.1,
-        turbidity: predictedValues[(data.length - 1) * 6 + 4] + (Math.random() - 0.5) * 0.05,
-        nitrate: predictedValues[(data.length - 1) * 6 + 5] + (Math.random() - 0.5) * 0.01,
+        waterTemperature: predictedValues[lastPredictedIndex + 0] + (Math.random() - 0.5) * 0.1,
+        salinity: predictedValues[lastPredictedIndex + 1] + (Math.random() - 0.5) * 0.1,
+        pHLevel: predictedValues[lastPredictedIndex + 2] + (Math.random() - 0.5) * 0.01,
+        dissolvedOxygen: predictedValues[lastPredictedIndex + 3] + (Math.random() - 0.5) * 0.1,
+        turbidity: predictedValues[lastPredictedIndex + 4] + (Math.random() - 0.5) * 0.05,
+        nitrate: predictedValues[lastPredictedIndex + 5] + (Math.random() - 0.5) * 0.01,
       };
-  
+
       data.push(newRecord); // Add the new record to the data array
     }
-  
+
     return data;
   };
 
@@ -326,15 +334,15 @@ export default function Home() {
     const salinityStatus =
       data.salinity >= thresholds.salinityIdeal[0] && data.salinity <= thresholds.salinityIdeal[1]
         ? 'ideal'
-        : (data.salinity >= thresholds.salinityCaution[0] && data.salinity <= thresholds.salinityCaution[1]) ||
-          (data.salinity >= thresholds.salinityCaution[2] && data.salinity <= thresholds.salinityCaution[3])
+        : (data.salinity >= thresholds.salinityCaution[0] && data.salinity < thresholds.salinityIdeal[0]) ||
+          (data.salinity > thresholds.salinityIdeal[1] && data.salinity <= thresholds.salinityCaution[3])
           ? 'caution'
           : 'dangerous';
 
     const pHLevelStatus =
       data.pHLevel >= thresholds.pHLevelIdeal[0] && data.pHLevel <= thresholds.pHLevelIdeal[1]
         ? 'ideal'
-        : data.pHLevel >= thresholds.pHLevelCaution[0] && data.pHLevel <= thresholds.pHLevelCaution[1]
+        : data.pHLevel >= thresholds.pHLevelCaution[0] && data.pHLevel < thresholds.pHLevelIdeal[0]
           ? 'concerning'
           : 'acidification';
 
@@ -367,10 +375,19 @@ export default function Home() {
     if (turbidityStatus === 'stressed') threateningFactors += 'High turbidity, ';
     if (nitrateStatus === 'suffocating') threateningFactors += 'High nitrate concentrations, ';
 
+    // Include caution levels as threatening if they are outside ideal range
+    if (waterTemperatureStatus === 'caution') threateningFactors += 'Caution: Water temperature outside ideal range, ';
+    if (salinityStatus === 'caution') threateningFactors += 'Caution: Salinity outside ideal range, ';
+    if (pHLevelStatus === 'concerning') threateningFactors += 'Caution: pH Level outside ideal range, ';
+    if (dissolvedOxygenStatus === 'warning') threateningFactors += 'Caution: Dissolved Oxygen outside ideal range, ';
+    if (turbidityStatus === 'reducedLight') threateningFactors += 'Caution: Turbidity outside ideal range, ';
+    if (nitrateStatus === 'manageable') threateningFactors += 'Caution: Nitrate concentration outside ideal range, ';
+
+
     if (threateningFactors === '') {
       threateningFactors = 'None';
     } else {
-      threateningFactors = threateningFactors.slice(0, -2);
+      threateningFactors = threateningFactors.slice(0, -2); // Remove trailing comma and space
     }
 
     const defaultActions = {
@@ -380,17 +397,37 @@ export default function Home() {
       hypoxia: 'Aerate the water or increase oxygen production through planting aquatic vegetation. Reduce organic waste input.',
       stressed: 'Reduce sediment input from construction, dredging, and agriculture. Use silt curtains and erosion control measures.',
       suffocating: 'Control nutrient runoff from agriculture and sewage. Implement advanced wastewater treatment and reduce fertilizer use.',
+      caution: 'Monitor closely and address potential sources of stress.' // Generic action for caution levels
     };
 
     let suggestedActions = '';
     if (waterTemperatureStatus === 'highRisk') suggestedActions += defaultActions.highRisk + ' ';
-    if (salinityStatus === 'dangerous') suggestedActions += defaultActions.dangerous + ' ';
-    if (pHLevelStatus === 'acidification') suggestedActions += defaultActions.acidification + ' ';
-    if (dissolvedOxygenStatus === 'hypoxia') suggestedActions += defaultActions.hypoxia + ' ';
-    if (turbidityStatus === 'stressed') suggestedActions += defaultActions.stressed + ' ';
-    if (nitrateStatus === 'suffocating') suggestedActions += defaultActions.suffocating + ' ';
+    else if (waterTemperatureStatus === 'caution') suggestedActions += defaultActions.caution + ' ';
 
-    const isSuitable = threateningFactors === 'None';
+    if (salinityStatus === 'dangerous') suggestedActions += defaultActions.dangerous + ' ';
+    else if (salinityStatus === 'caution') suggestedActions += defaultActions.caution + ' ';
+
+    if (pHLevelStatus === 'acidification') suggestedActions += defaultActions.acidification + ' ';
+    else if (pHLevelStatus === 'concerning') suggestedActions += defaultActions.caution + ' ';
+
+    if (dissolvedOxygenStatus === 'hypoxia') suggestedActions += defaultActions.hypoxia + ' ';
+    else if (dissolvedOxygenStatus === 'warning') suggestedActions += defaultActions.caution + ' ';
+
+    if (turbidityStatus === 'stressed') suggestedActions += defaultActions.stressed + ' ';
+    else if (turbidityStatus === 'reducedLight') suggestedActions += defaultActions.caution + ' ';
+
+    if (nitrateStatus === 'suffocating') suggestedActions += defaultActions.suffocating + ' ';
+    else if (nitrateStatus === 'manageable') suggestedActions += defaultActions.caution + ' ';
+
+
+    const isSuitable =
+      waterTemperatureStatus === 'ideal' &&
+      salinityStatus === 'ideal' &&
+      pHLevelStatus === 'ideal' &&
+      dissolvedOxygenStatus === 'ideal' &&
+      turbidityStatus === 'ideal' &&
+      nitrateStatus === 'ideal';
+
 
     return {
       isSuitable,
@@ -405,14 +442,42 @@ export default function Home() {
     };
   };
 
-  const thresholds = defineSensorDataThresholds();
+  const downloadPDF = async () => {
+    const reportElement = reportRef.current;
+    if (!reportElement) {
+      console.error("Report element not found");
+      return;
+    }
+    setIsDownloading(true);
+
+    try {
+      const canvas = await html2canvas(reportElement, { scale: 2 }); // Increase scale for better quality
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10; // Add some margin from the top
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save('coralsafe_report.pdf');
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF report.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
-      <div className="max-w-5xl w-full space-y-8">
+      <div ref={reportRef} className="max-w-5xl w-full space-y-8"> {/* Add ref here */}
         <Card className="bg-card shadow-md rounded-md">
           <CardHeader>
-            <div className="flex items-center space-x-4">
+             <div className="flex items-center space-x-4">
               <Avatar>
                 <AvatarImage
                   src="https://picsum.photos/50/50"
@@ -421,26 +486,34 @@ export default function Home() {
                 />
                 <AvatarFallback>CS</AvatarFallback>
               </Avatar>
-              CoralSafe: Sensor Data Analyzer
+              <span>CoralSafe: Sensor Data Analyzer</span>
             </div>
           </CardHeader>
           <CardContent>
-            Sensor Data Input
-            <div>Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</div>
+              <p className="font-medium mb-1">Sensor Data Input</p>
+              <p className="text-sm text-muted-foreground mb-2">Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</p>
             <Textarea
               placeholder="Paste sensor data here"
               value={sensorData}
               onChange={(e) => setSensorData(e.target.value)}
+              className="mb-4"
             />
-            <Button onClick={analyzeData} disabled={isLoading}>
-              Analyze Sensor Data
-            </Button>
+             <div className="flex space-x-2">
+              <Button onClick={analyzeData} disabled={isLoading || isDownloading}>
+                {isLoading ? 'Analyzing...' : 'Analyze Sensor Data'}
+              </Button>
+              {analysisResults.length > 0 && (
+                <Button onClick={downloadPDF} disabled={isLoading || isDownloading}>
+                  {isDownloading ? 'Downloading...' : 'Download Report (PDF)'}
+                </Button>
+              )}
+            </div>
             {isLoading && (
-              <Alert variant="default">
+              <Alert variant="default" className="mt-4">
                 <AlertTitle>Analyzing Data...</AlertTitle>
                 <AlertDescription>
-                  Progress: {analysisProgress.toFixed(2)}%
-                  <Progress value={analysisProgress} />
+                  Progress: {analysisProgress.toFixed(0)}%
+                  <Progress value={analysisProgress} className="mt-1" />
                 </AlertDescription>
               </Alert>
             )}
@@ -456,83 +529,73 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table className="rounded-md shadow-md">
+              <Table className="rounded-md shadow-md border">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-left font-medium">Time</TableHead>
-                    <TableHead className="text-left font-medium">Location</TableHead>
-                    <TableHead className="text-left font-medium">Suitability</TableHead>
-                    <TableHead className="text-left font-medium">Water Temperature</TableHead>
-                    <TableHead className="text-left font-medium">Salinity</TableHead>
-                    <TableHead className="text-left font-medium">pH Level</TableHead>
-                    <TableHead className="text-left font-medium">Dissolved Oxygen</TableHead>
-                    <TableHead className="text-left font-medium">Turbidity</TableHead>
-                    <TableHead className="text-left font-medium">Nitrate</TableHead>
+                  <TableRow className="border-b">
+                    <TableHead className="text-left font-medium border-r">Time</TableHead>
+                    <TableHead className="text-left font-medium border-r">Location</TableHead>
+                    <TableHead className="text-left font-medium border-r">Suitability</TableHead>
+                    <TableHead className="text-left font-medium border-r">Water Temperature (°C)</TableHead>
+                    <TableHead className="text-left font-medium border-r">Salinity (PSU)</TableHead>
+                    <TableHead className="text-left font-medium border-r">pH Level</TableHead>
+                    <TableHead className="text-left font-medium border-r">Dissolved Oxygen (mg/L)</TableHead>
+                    <TableHead className="text-left font-medium border-r">Turbidity (NTU)</TableHead>
+                    <TableHead className="text-left font-medium border-r">Nitrate (mg/L)</TableHead>
                     <TableHead className="text-left font-medium">Improvements</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="py-2">{result.time}</TableCell>
-                      <TableCell className="py-2">{result.location}</TableCell>
-                      <TableCell className="py-2">
+                    <TableRow key={index} className="border-b">
+                      <TableCell className="py-2 border-r">{result.time}</TableCell>
+                      <TableCell className="py-2 border-r">{result.location}</TableCell>
+                      <TableCell className="py-2 border-r">
                         {result.isSuitable === null ? (
-                          <div className="text-gray-500">Analyzing...</div>
+                          <span className="text-gray-500">Analyzing...</span>
                         ) : result.isSuitable ? (
-                          <div className="text-green-500">Suitable</div>
+                           <span className="bg-green-100 text-green-600 rounded-full px-2 py-1">Suitable</span>
                         ) : (
-                          <div className="text-red-500">Threatening</div>
+                          <span className="bg-red-100 text-red-600 rounded-full px-2 py-1">Threatening</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.waterTemperature}
+                      <TableCell className="py-2 border-r">
                         <span className={PARAMETER_STATUS_MAP.waterTemperature[result.waterTemperatureStatus as keyof typeof PARAMETER_STATUS_MAP.waterTemperature]}>
-                          {result.waterTemperatureStatus}
+                          {result.waterTemperature.toFixed(2)} ({result.waterTemperatureStatus})
                         </span>
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.salinity}
+                      <TableCell className="py-2 border-r">
                         <span className={PARAMETER_STATUS_MAP.salinity[result.salinityStatus as keyof typeof PARAMETER_STATUS_MAP.salinity]}>
-                          {result.salinityStatus}
+                          {result.salinity.toFixed(2)} ({result.salinityStatus})
                         </span>
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.pHLevel}
+                      <TableCell className="py-2 border-r">
                         <span className={PARAMETER_STATUS_MAP.pHLevel[result.pHLevelStatus as keyof typeof PARAMETER_STATUS_MAP.pHLevel]}>
-                          {result.pHLevelStatus}
+                          {result.pHLevel.toFixed(2)} ({result.pHLevelStatus})
                         </span>
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.dissolvedOxygen}
+                       <TableCell className="py-2 border-r">
                         <span className={PARAMETER_STATUS_MAP.dissolvedOxygen[result.dissolvedOxygenStatus as keyof typeof PARAMETER_STATUS_MAP.dissolvedOxygen]}>
-                          {result.dissolvedOxygenStatus}
+                          {result.dissolvedOxygen.toFixed(2)} ({result.dissolvedOxygenStatus})
                         </span>
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.turbidity}
-                        <span className={PARAMETER_STATUS_MAP.turbidity[result.turbidityStatus as keyof typeof PARAMETER_STATUS_MAP.turbidity]}>
-                          {result.turbidityStatus}
-                        </span>
+                      <TableCell className="py-2 border-r">
+                         <span className={PARAMETER_STATUS_MAP.turbidity[result.turbidityStatus as keyof typeof PARAMETER_STATUS_MAP.turbidity]}>
+                          {result.turbidity.toFixed(2)} ({result.turbidityStatus})
+                         </span>
                       </TableCell>
-                      <TableCell className="py-2">
-                        {result.nitrate}
+                      <TableCell className="py-2 border-r">
                         <span className={PARAMETER_STATUS_MAP.nitrate[result.nitrateStatus as keyof typeof PARAMETER_STATUS_MAP.nitrate]}>
-                          {result.nitrateStatus}
+                          {result.nitrate.toFixed(2)} ({result.nitrateStatus})
                         </span>
                       </TableCell>
                       <TableCell className="py-2">
-                        <Accordion type="single" collapsible>
-                          <AccordionItem value={`threats-${index}`}>
-                            <AccordionTrigger>Threatening Factors and Suggested Actions</AccordionTrigger>
+                        <Accordion type="single" collapsible className="w-full">
+                          <AccordionItem value={`item-${index}`}>
+                            <AccordionTrigger className="text-sm">Details</AccordionTrigger>
                             <AccordionContent>
-                              <div>
-                                <div>
-                                  <strong>Threatening Factors:</strong> {result.threateningFactors}
-                                </div>
-                                <div>
-                                  <strong>Suggested Actions:</strong> {result.suggestedActions}
-                                </div>
+                              <div className="text-xs">
+                                <p><strong>Threatening Factors:</strong> {result.threateningFactors || 'None'}</p>
+                                <p><strong>Suggested Actions:</strong> {result.suggestedActions || 'None'}</p>
                               </div>
                             </AccordionContent>
                           </AccordionItem>
@@ -546,38 +609,55 @@ export default function Home() {
           </Card>
         )}
 
-        {Object.keys(THEME_CONFIG).map((name) => (
-          <Card key={name} className="bg-card shadow-md rounded-md">
-            <CardHeader>
-              <CardTitle>{THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time</CardTitle>
-              <CardDescription>
-                Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analysisResults.length > 0 ? (
-                <ChartContainer config={THEME_CONFIG}>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={analysisResults}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis />
-                      <Tooltip content={<ChartTooltipContent />} />
-                      <Legend content={<ChartLegendContent />} />
-                      <Line
-                        type="monotone"
-                        dataKey={name}
-                        stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
-                        name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              ) : (
-                <div>No data to display. Please input sensor data and analyze.</div>
-              )}
-            </CardContent>
-          </Card>
+        {analysisResults.length > 0 && Object.keys(THEME_CONFIG).map((name) => (
+          <Accordion key={name} type="single" collapsible className="w-full">
+            <AccordionItem value={name}>
+              <Card className="bg-card shadow-md rounded-md">
+                <AccordionTrigger className="w-full px-6 py-4">
+                   <CardHeader className="p-0 text-left">
+                     <CardTitle>{THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} Over Time</CardTitle>
+                     <CardDescription>
+                       Trends of {THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} over time, including predictions.
+                     </CardDescription>
+                   </CardHeader>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <CardContent className="pt-0">
+                    <ChartContainer config={THEME_CONFIG}>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <LineChart data={analysisResults}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="time" />
+                          <YAxis />
+                          <Tooltip content={<ChartTooltipContent />} />
+                          <Legend content={<ChartLegendContent />} />
+                           {/* Original data line */}
+                          <Line
+                            type="monotone"
+                            dataKey={name}
+                            stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
+                            name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
+                            dot={true} // Show dots for original data
+                            connectNulls={false} // Do not connect line over prediction gap
+                          />
+                          {/* Predicted data line - rendered differently */}
+                          <Line
+                            type="monotone"
+                            dataKey={name}
+                            stroke={THEME_CONFIG[name as keyof typeof THEME_CONFIG].color}
+                            strokeDasharray="5 5" // Dashed line for prediction
+                            name={`${THEME_CONFIG[name as keyof typeof THEME_CONFIG].label} (Predicted)`}
+                            dot={{ stroke: THEME_CONFIG[name as keyof typeof THEME_CONFIG].color, strokeWidth: 1, r: 4, fill: '#fff' }} // Style predicted points
+                            connectNulls={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </AccordionContent>
+              </Card>
+            </AccordionItem>
+          </Accordion>
         ))}
       </div>
     </div>
