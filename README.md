@@ -54,7 +54,7 @@ Each value **includes units** for realism.
 
 ## 🛠️ Notes
 
-- **No `Coral_Supportive` column is given** — the Gemini API must **predict** it.
+- **No `Coral_Supportive` column is given** — the ML Model must **predict** it.
 - Data includes **natural variations** and **extreme events** to simulate real-world conditions.
 - Only **one location** (`Reef_A`) is included.
 
