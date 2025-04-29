@@ -66,7 +66,34 @@ Each value **includes units** for realism.
 - Add more reef locations (`Reef_B`, `Reef_C`, etc.)
 - Multi-depth water sampling
 - Seasonal datasets (not just April)
+---
+# 🌊 Mariana V2.0 Release Announcement 🚀
 
+We are excited to announce that **Mariana V2.0** — the next major release of our intelligent coral reef monitoring system — will be officially launched on **May 1st, 2025**! 🎉
+
+## 🧠 What's New in Mariana V2.0?
+
+- 🔍 **Advanced Threat Detection**  
+  Now with improved AI/ML analysis to identify harmful environmental conditions more accurately.
+
+- 🧪 **Actionable Suggestions**  
+  Get tailored recommendations like buffering agents for acidification, oxygenation tips, and more.
+
+- 📈 **Smarter Visualizations**  
+  Realistic parameter curves and real-time changes for an immersive experience.
+
+- 🧠 **RiftGuard Ready**  
+  Mariana V2.0 prepares your system for integration with **RiftGuard** — our full-stack ML engine for predictive coral defense.
+
+---
+
+📅 **Release Date:**  
+🗓️ **May 1st, 2025** (01.05)
+
+Stay tuned, and thank you for being a part of the mission to protect our oceans! 🌍🐠
+
+---
+#CoralSafe #MarianaV2 #ReefProtection #AIForOcean
 ---
 # CoralSafe Deployment Guide
 
