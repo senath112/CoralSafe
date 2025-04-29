@@ -705,6 +705,7 @@ export default function Home() {
                             name={THEME_CONFIG[name as keyof typeof THEME_CONFIG].label}
                             dot={true} // Show dots for original data
                             connectNulls={false} // Do not connect line over prediction gap
+                            data={analysisResults.filter(d => !d.time.startsWith('P'))} // Only plot original points on this line
                           />
                           {/* Predicted data line - rendered differently */}
                           <Line
@@ -730,5 +731,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
