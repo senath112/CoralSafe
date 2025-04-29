@@ -1,5 +1,5 @@
 # 📄 Reef_A_Marine_Environment_Dataset
-
+[![Netlify Status](https://api.netlify.com/api/v1/badges/dedd2488-a3eb-48da-8e29-a7e6eae5f947/deploy-status)](https://app.netlify.com/sites/statuesque-cassata-e55aad/deploys)
 This dataset contains simulated marine environmental data collected from **Reef_A** across **April 2025**, captured at 6-hour intervals.
 
 It is designed to work with a **Machine Learning model powered by the Gemini API** to predict whether marine environmental conditions are **supportive** or **threatening** for coral health based on multiple parameters.
