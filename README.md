@@ -8,17 +8,16 @@ It is designed to work with a **Machine Learning model powered by the Gemini API
 
 ## 📈 Dataset Overview
 
-| Column | Description | Example |
-|:---|:---|:---|
-| `Timestamp` | Date and time of observation (UTC) | `2025-04-01 00:00:00` |
-| `Location` | Reef name (only Reef_A) | `Reef_A` |
-| `Water_Temperature` | Surface water temperature | `28.1 °C` |
-| `Salinity` | Salt concentration | `34.7 PSU` |
-| `pH_Level` | Water acidity/alkalinity | `7.8` |
-| `Dissolved_Oxygen` | Amount of oxygen dissolved in water | `5.8 mg/L` |
-| `Turbidity` | Water clarity | `3.3 NTU` |
-| `Nitrate` | Nitrate concentration | `0.12 mg/L` |
+## 🌊 Parameter Thresholds for Coral Health
 
+| Parameter           | Ideal Range       | Caution / Warning      | Threatening / Dangerous           |
+|---------------------|-------------------|-------------------------|------------------------------------|
+| **Water Temperature (°C)** | 24–28              | 28–30                  | > 30                               |
+| **Salinity (PSU)**         | 33–36              | 31–33 or 36–38         | < 31 or > 38                       |
+| **pH Level**               | 8.0–8.3            | 7.8–8.0                | < 7.8 (Acidification)              |
+| **Dissolved Oxygen (mg/L)**| > 6.0              | 4.0–6.0                | < 4.0 (Hypoxia)                    |
+| **Turbidity (NTU)**        | < 1.0              | 1.0–3.0                | > 3.0 (Light Stress)              |
+| **Nitrate (mg/L)**         | < 0.1              | 0.1–0.3                | > 0.3 (Suffocating)                |
 Each value **includes units** for realism.
 
 ---
