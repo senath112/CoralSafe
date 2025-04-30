@@ -6,8 +6,8 @@ import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {defineSensorDataThresholds, analyzeSensorData, predictFutureReadings, calculateSuitabilityIndex} from '@/lib/utils';
-import {Chart} from '@/components/Chart';
+import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
+import {ChartContainer, Chart, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, ChartStyle} from '@/components/Chart';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs';
@@ -21,7 +21,7 @@ import {
   TableRow,
   TableCell,
   TableCaption,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -149,7 +149,7 @@ export default function Home() {
     }).filter(Boolean) as AnalysisResult[];
   };
 
-  const trainModel = async (data: AnalysisResult[]) => {
+  const trainModel = async (data: SensorData[]) => {
     const numRecords = data.length;
     const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
 
@@ -223,12 +223,11 @@ export default function Home() {
       // Predict future data points using TensorFlow.js model
       if (trainedModel && parsedData.length > 0) {
         const numPredictions = 5;
-        let lastRecord = parsedData[parsedData.length - 1];
+         let lastRecord = parsedData[parsedData.length - 1];
         let predictedChartData = [];
 
         for (let i = 0; i < numPredictions; i++) {
-          // Prepare the input tensor using the last record's data
-          const inputTensor = tf.tensor2d(
+           const inputTensor = tf.tensor2d(
             [
               [
                 lastRecord.waterTemperature,
@@ -241,12 +240,10 @@ export default function Home() {
             ],
             [1, 6]
           );
-
           // Generate predictions
           const predictions = trainedModel.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
           const predictedValues = await predictions.data();
 
-          const predictionTime = `P${i + 1}`; // Predicted Time
           // Add slight variations to the predicted values
           const waterTemperature = predictedValues[0] + (Math.random() - 0.5) * 0.1; // Adding -0.05 to 0.05 variation
           const salinity = predictedValues[1] + (Math.random() - 0.5) * 0.1;
@@ -254,6 +251,7 @@ export default function Home() {
           const dissolvedOxygen = predictedValues[3] + (Math.random() - 0.5) * 0.1;
           const turbidity = predictedValues[4] + (Math.random() - 0.5) * 0.05;
           const nitrate = predictedValues[5] + (Math.random() - 0.5) * 0.01;
+          const predictionTime = `P${i + 1}`;
           predictedChartData.push({
             time: predictionTime,
             location: "Prediction",
@@ -263,10 +261,9 @@ export default function Home() {
             dissolvedOxygen: dissolvedOxygen,
             turbidity: turbidity,
             nitrate: nitrate,
-            isSuitable: null, // Mark as prediction
+            isSuitable: null,
           });
 
-          // Update lastRecord for the next prediction
           lastRecord = {
             ...lastRecord,
             waterTemperature: waterTemperature,
@@ -276,7 +273,7 @@ export default function Home() {
             turbidity: turbidity,
             nitrate: nitrate,
           };
-          detailedResults.push({
+            detailedResults.push({
             time: predictionTime,
             location: "Prediction",
             waterTemperature: waterTemperature,
@@ -297,7 +294,7 @@ export default function Home() {
       });
     } catch (error: any) {
       console.error('Error during analysis:', error);
-      setToast({
+      toast({
         title: 'Error',
         description: 'An error occurred during the analysis. Please check the console for details.',
         variant: 'destructive',
@@ -312,13 +309,24 @@ export default function Home() {
       
         
           
-            CoralSafe: Sensor Data Analyzer
+            
+              
+                <AvatarImage 
+                  src="https://picsum.photos/50/50" 
+                  alt="CoralSafe Logo" 
+                  className="mr-2 rounded-full" 
+                />
+              
+            
           
         
         
-          Sensor Data Input
           
-          Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+            Sensor Data Input
+          
+          
+            Format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L
+          
         
         
           
@@ -470,4 +478,5 @@ export default function Home() {
     
   );
 }
+
 
