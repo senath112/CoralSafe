@@ -27,6 +27,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
+  TableCaption,
 } from "@/components/ui/table"; // Ensure Table components are imported
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -110,12 +111,21 @@ export default function Home() {
     }
 
     // Temporarily set text to black for PDF generation
-    const originalColors = new Map<HTMLElement, string>();
-    const elementsToColor = input.querySelectorAll('.text-foreground, .text-muted-foreground, text'); // Select elements with theme colors and SVG text
+    const originalColors = new Map<HTMLElement | SVGTextElement, string>();
+    // Query for common text elements and SVG text elements
+    const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement>(
+        '.text-foreground, .text-muted-foreground, text, .text-green-800, .dark\\:text-green-200, .text-yellow-800, .dark\\:text-yellow-200, .text-red-800, .dark\\:text-red-200, .text-gray-800, .dark\\:text-gray-300' // Include specific color classes used in tables/badges and SVG text
+    );
+
     elementsToColor.forEach(el => {
-       if (el instanceof HTMLElement || el instanceof SVGTextElement) {
-         originalColors.set(el, el.style.color);
-         el.style.color = 'black'; // Force black color
+       originalColors.set(el, el.style.fill || el.style.color); // Store fill for SVG, color for HTML
+       // Force black color for PDF rendering
+       if (el instanceof SVGTextElement) {
+         el.style.fill = 'black';
+         el.style.color = ''; // Clear color style if any
+       } else {
+         el.style.color = 'black';
+         el.style.fill = ''; // Clear fill style if any
        }
     });
 
@@ -124,7 +134,6 @@ export default function Home() {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff' // Force white background for PDF clarity
-        //backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#f0f0f0'
       })
       .then((canvas) => {
         const imgData = canvas.toDataURL('image/png');
@@ -163,13 +172,20 @@ export default function Home() {
       .finally(() => {
          // Restore original colors
          elementsToColor.forEach(el => {
-             if (el instanceof HTMLElement || el instanceof SVGTextElement) {
-               const originalColor = originalColors.get(el);
-               if (originalColor !== undefined) {
-                   el.style.color = originalColor;
-               } else {
-                   el.style.color = ''; // Remove inline style if none existed
-               }
+             const originalColor = originalColors.get(el);
+             if (originalColor !== undefined) {
+                 if (el instanceof SVGTextElement) {
+                    el.style.fill = originalColor;
+                 } else {
+                    el.style.color = originalColor;
+                 }
+             } else {
+                 // Remove inline style if none existed originally
+                 if (el instanceof SVGTextElement) {
+                    el.style.fill = '';
+                 } else {
+                    el.style.color = '';
+                 }
              }
          });
       });
@@ -700,8 +716,6 @@ export default function Home() {
                                suitabilityText = 'Threatening';
                            }
                        }
-
-                        // Helper function removed as logic is integrated above
 
 
                     return (

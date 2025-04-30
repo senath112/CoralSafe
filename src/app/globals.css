@@ -11,7 +11,7 @@ body {
     /* Updated Theme Colors (Sea Blue, Light Beige, Coral) */
     --background-raw: 60 33% 96%; /* Raw HSL for jsPDF background */
     --background: hsl(var(--background-raw)); /* Light beige */
-    --foreground: hsl(160, 42%, 26%); /* Sea blue */
+    --foreground: hsl(160, 42%, 10%); /* Darker Sea blue for better text contrast */
 
     --card: hsl(var(--background));
     --card-foreground: hsl(var(--foreground));
@@ -51,7 +51,7 @@ body {
     /* Define dark mode colors if needed */
     --background-raw: 220 15% 15%;
     --background: hsl(var(--background-raw));
-    --foreground: hsl(60, 30%, 95%); /* Off-white */
+    --foreground: hsl(60, 30%, 95%); /* Off-white for dark mode text */
 
     --card: hsl(220, 15%, 20%);
     --card-foreground: hsl(var(--foreground));
@@ -92,7 +92,7 @@ body {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground; /* Ensure base text color uses foreground */
      /* Add smooth scrolling */
     scroll-behavior: smooth;
      /* Improve text rendering */
@@ -100,13 +100,15 @@ body {
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Add a subtle gradient background - remove if using the full underwater effect */
+  /* Add a subtle gradient background */
    body {
-     background: linear-gradient(180deg, hsl(180, 50%, 85%), hsl(200, 60%, 95%));
+     /* Slightly adjusted gradient for better contrast maybe */
+     background: linear-gradient(180deg, hsl(180, 50%, 90%), hsl(200, 60%, 98%));
    }
 
    .dark body {
      background: linear-gradient(180deg, hsl(220, 20%, 10%), hsl(220, 15%, 25%));
+     color: hsl(var(--foreground)); /* Explicitly set dark mode text color */
    }
 
 
