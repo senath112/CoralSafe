@@ -20,7 +20,7 @@ import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs';
-import {useToast} from "@/hooks/use-toast";
+import {useToast} from "@/hooks/use-toast"; // Ensure useToast is correctly imported
 import {
   Table,
   TableHeader,
@@ -30,7 +30,7 @@ import {
   TableRow,
   TableCell,
   TableCaption,
-} from "@/components/ui/table";
+} from "@/components/ui/table"; // Ensure Table components are imported
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -346,7 +346,9 @@ export default function Home() {
                      }
                  });
                  if (improvements.length === 0) {
-                    improvements = ["Consider general water quality improvements."]; // Fallback
+                    // If marked unsuitable but no specific factor crossed the 'threatening' line,
+                    // it means multiple factors are likely in the 'caution' zone.
+                    improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
                  }
                  console.log(`Improvements for point ${index}:`, improvements);
             } else {
@@ -413,7 +415,7 @@ export default function Home() {
                 const predictedResult: AnalysisResult = {
                     time: `P${i + 1}`,
                     location: lastKnownData.location, // Assume same location
-                    // Apply variations to de-normalized values
+                    // Apply variations to de-normalized values, ensuring non-negative results
                     waterTemperature: Math.max(0, predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1),
                     salinity: Math.max(0, predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1),
                     pHLevel: Math.max(0, predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01),
@@ -708,47 +710,54 @@ export default function Home() {
                 <CardTitle>Parameter Ranges for Coral Health</CardTitle>
             </CardHeader>
             <CardContent>
-                 <Accordion type="multiple" className="w-full space-y-2">
-                    <AccordionItem value="ideal">
-                      <AccordionTrigger className="text-green-700 font-medium">Ideal Ranges</AccordionTrigger>
-                      <AccordionContent className="text-sm text-muted-foreground pl-4">
-                        <ul className="list-disc space-y-1">
-                            <li>Water Temperature: 24-28 °C</li>
-                            <li>Salinity: 33-36 PSU</li>
-                            <li>pH Level: 8.0-8.3</li>
-                            <li>Dissolved Oxygen: Greater than 6.0 mg/L</li>
-                            <li>Turbidity: Below 1.0 NTU</li>
-                            <li>Nitrate: Less than 0.1 mg/L</li>
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                     <AccordionItem value="caution">
-                      <AccordionTrigger className="text-yellow-700 font-medium">Cautionary Ranges (Warning)</AccordionTrigger>
-                      <AccordionContent className="text-sm text-muted-foreground pl-4">
-                         <ul className="list-disc space-y-1">
-                            <li>Water Temperature: 28-30 °C</li>
-                            <li>Salinity: 31-33 or 36-38 PSU</li>
-                            <li>pH Level: 7.8-8.0</li>
-                            <li>Dissolved Oxygen: 4.0-6.0 mg/L</li>
-                            <li>Turbidity: 1.0-3.0 NTU</li>
-                            <li>Nitrate: 0.1-0.3 mg/L</li>
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                     <AccordionItem value="threatening">
-                      <AccordionTrigger className="text-red-700 font-medium">Threatening Conditions</AccordionTrigger>
-                       <AccordionContent className="text-sm text-muted-foreground pl-4">
-                         <ul className="list-disc space-y-1">
-                            <li>Water Temperature: Above 30°C poses a high bleaching risk.</li>
-                            <li>Salinity: Below 31 or Above 38 PSU is dangerous.</li>
-                            <li>pH Level: Below 7.8 indicates significant acidification stress.</li>
-                            <li>Dissolved Oxygen: Below 4.0 mg/L can cause hypoxia leading to coral death.</li>
-                            <li>Turbidity: Above 3.0 NTU significantly stresses corals.</li>
-                            <li>Nitrate: Above 0.3 mg/L can cause algal blooms that suffocate coral reefs.</li>
-                        </ul>
-                      </AccordionContent>
-                    </AccordionItem>
-                 </Accordion>
+               <Table className="rounded-md shadow-md border border-border">
+                    <TableHeader>
+                        <TableRow className="border-b border-border">
+                            <TableHead className="text-left font-medium border-r border-border py-2 px-3">Parameter</TableHead>
+                            <TableHead className="text-center font-medium border-r border-border py-2 px-3 bg-green-100 text-green-800">Ideal Range</TableHead>
+                            <TableHead className="text-center font-medium border-r border-border py-2 px-3 bg-yellow-100 text-yellow-800">Caution Range</TableHead>
+                            <TableHead className="text-center font-medium py-2 px-3 bg-red-100 text-red-800">Threatening Condition</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                     <TableBody>
+                        <TableRow className="border-b border-border">
+                            <TableCell className="font-medium border-r border-border py-2 px-3">Water Temperature (°C)</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">24-28</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">28-30</TableCell>
+                            <TableCell className="text-center py-2 px-3">Above 30 (Bleaching risk)</TableCell>
+                        </TableRow>
+                        <TableRow className="border-b border-border">
+                            <TableCell className="font-medium border-r border-border py-2 px-3">Salinity (PSU)</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">33-36</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">31-33 or 36-38</TableCell>
+                            <TableCell className="text-center py-2 px-3">Below 31 or Above 38</TableCell>
+                        </TableRow>
+                         <TableRow className="border-b border-border">
+                            <TableCell className="font-medium border-r border-border py-2 px-3">pH Level</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">8.0-8.3</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">7.8-8.0</TableCell>
+                            <TableCell className="text-center py-2 px-3">Below 7.8 (Acidification)</TableCell>
+                        </TableRow>
+                         <TableRow className="border-b border-border">
+                            <TableCell className="font-medium border-r border-border py-2 px-3">Dissolved Oxygen (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">&gt; 6.0</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">4.0-6.0</TableCell>
+                            <TableCell className="text-center py-2 px-3">Below 4.0 (Hypoxia)</TableCell>
+                        </TableRow>
+                         <TableRow className="border-b border-border">
+                            <TableCell className="font-medium border-r border-border py-2 px-3">Turbidity (NTU)</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">&lt; 1.0</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">1.0-3.0</TableCell>
+                            <TableCell className="text-center py-2 px-3">Above 3.0</TableCell>
+                        </TableRow>
+                        <TableRow className="border-b-0"> {/* Last row no bottom border */}
+                            <TableCell className="font-medium border-r border-border py-2 px-3">Nitrate (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">&lt; 0.1</TableCell>
+                            <TableCell className="text-center border-r border-border py-2 px-3">0.1-0.3</TableCell>
+                            <TableCell className="text-center py-2 px-3">Above 0.3 (Algal blooms)</TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
             </CardContent>
           </Card>
       )}
