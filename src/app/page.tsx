@@ -32,6 +32,7 @@ interface AnalysisResult {
   turbidity: number;
   nitrate: number;
   isSuitable: boolean | null;
+  suitabilityIndex: number | null;
   threateningFactors: string;
   suggestedActions: string;
   waterTemperatureStatus: 'ideal' | 'caution' | 'highRisk';
@@ -161,6 +162,7 @@ export default function Home() {
         predictedData.map(async (data, index) => {
           const {
             isSuitable,
+            suitabilityIndex,
             threateningFactors,
             suggestedActions,
             waterTemperatureStatus,
@@ -177,6 +179,7 @@ export default function Home() {
           return {
             ...data,
             isSuitable,
+            suitabilityIndex,
             threateningFactors,
             suggestedActions,
             waterTemperatureStatus,
@@ -436,9 +439,20 @@ export default function Home() {
       nitrateStatus === 'suffocating'
     );
 
+    // Calculate a suitability index based on the number of parameters within ideal ranges
+    let idealParameterCount = 0;
+    if (waterTemperatureStatus === 'ideal') idealParameterCount++;
+    if (salinityStatus === 'ideal') idealParameterCount++;
+    if (pHLevelStatus === 'ideal') idealParameterCount++;
+    if (dissolvedOxygenStatus === 'ideal') idealParameterCount++;
+    if (turbidityStatus === 'ideal') idealParameterCount++;
+    if (nitrateStatus === 'ideal') idealParameterCount++;
+
+    const suitabilityIndex = Math.round((idealParameterCount / 6) * 100); // Scale to 0-100
 
     return {
       isSuitable,
+      suitabilityIndex,
       threateningFactors,
       suggestedActions,
       waterTemperatureStatus,
@@ -618,10 +632,17 @@ export default function Home() {
                       <TableCell className="py-2 border-r">
                         {result.isSuitable === null ? (
                           <span className="text-gray-500">Analyzing...</span>
-                        ) : result.isSuitable ? (
-                           <span className="bg-green-100 text-green-600 rounded-full px-2 py-1">Suitable</span>
                         ) : (
-                          <span className="bg-red-100 text-red-600 rounded-full px-2 py-1">Threatening</span>
+                          <>
+                            {result.isSuitable ? (
+                              <span className="bg-green-100 text-green-600 rounded-full px-2 py-1">Suitable</span>
+                            ) : (
+                              <span className="bg-red-100 text-red-600 rounded-full px-2 py-1">Threatening</span>
+                            )}
+                            {result.suitabilityIndex !== null && (
+                              <span className="text-gray-500 ml-2">({result.suitabilityIndex}/100)</span>
+                            )}
+                          </>
                         )}
                       </TableCell>
                       <TableCell className="py-2 border-r">
