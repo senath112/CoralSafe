@@ -408,25 +408,29 @@ export default function Home() {
       caution: 'Monitor closely and address potential sources of stress.' // Generic action for caution levels
     };
 
-    let suggestedActions = '';
-    if (waterTemperatureStatus === 'highRisk') suggestedActions += defaultActions.highRisk + ' ';
-    else if (waterTemperatureStatus === 'caution') suggestedActions += defaultActions.caution + ' ';
+    let actionsList: string[] = [];
+    if (waterTemperatureStatus === 'highRisk') actionsList.push(defaultActions.highRisk);
+    else if (waterTemperatureStatus === 'caution') actionsList.push(defaultActions.caution);
 
-    if (salinityStatus === 'dangerous') suggestedActions += defaultActions.dangerous + ' ';
-    else if (salinityStatus === 'caution') suggestedActions += defaultActions.caution + ' ';
+    if (salinityStatus === 'dangerous') actionsList.push(defaultActions.dangerous);
+    else if (salinityStatus === 'caution') actionsList.push(defaultActions.caution);
 
-    if (pHLevelStatus === 'acidification') suggestedActions += defaultActions.acidification + ' ';
-    else if (pHLevelStatus === 'concerning') suggestedActions += defaultActions.caution + ' ';
+    if (pHLevelStatus === 'acidification') actionsList.push(defaultActions.acidification);
+    else if (pHLevelStatus === 'concerning') actionsList.push(defaultActions.caution);
 
-    if (dissolvedOxygenStatus === 'hypoxia') suggestedActions += defaultActions.hypoxia + ' ';
-    else if (dissolvedOxygenStatus === 'warning') suggestedActions += defaultActions.caution + ' ';
+    if (dissolvedOxygenStatus === 'hypoxia') actionsList.push(defaultActions.hypoxia);
+    else if (dissolvedOxygenStatus === 'warning') actionsList.push(defaultActions.caution);
 
-    if (turbidityStatus === 'stressed') suggestedActions += defaultActions.stressed + ' ';
-    else if (turbidityStatus === 'reducedLight') suggestedActions += defaultActions.caution + ' ';
+    if (turbidityStatus === 'stressed') actionsList.push(defaultActions.stressed);
+    else if (turbidityStatus === 'reducedLight') actionsList.push(defaultActions.caution);
 
-    if (nitrateStatus === 'suffocating') suggestedActions += defaultActions.suffocating + ' ';
-    else if (nitrateStatus === 'manageable') suggestedActions += defaultActions.caution + ' ';
+    if (nitrateStatus === 'suffocating') actionsList.push(defaultActions.suffocating);
+    else if (nitrateStatus === 'manageable') actionsList.push(defaultActions.caution);
 
+    // Format actions as bullet points
+    const suggestedActions = actionsList.length > 0
+      ? actionsList.map(action => `- ${action}`).join('\n')
+      : 'None';
 
     // Determine suitability based ONLY on whether any parameter is in a high-risk/dangerous state.
     // Caution states do not automatically make it unsuitable.
@@ -682,7 +686,7 @@ export default function Home() {
                             <AccordionContent>
                               <div className="text-xs">
                                 <p><strong>Threatening Factors:</strong> {result.threateningFactors || 'None'}</p>
-                                <p><strong>Suggested Actions:</strong> {result.suggestedActions || 'None'}</p>
+                                <p className="whitespace-pre-line"><strong>Suggested Actions:</strong> {result.suggestedActions || 'None'}</p>
                               </div>
                             </AccordionContent>
                           </AccordionItem>
