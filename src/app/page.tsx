@@ -841,7 +841,7 @@ export default function Home() {
                                             }}
                                              activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--background))', fill: chartConfig[parameter.key]?.color || '#8884d8' }}
                                             name={parameter.name}
-                                            connectNulls={false} // Do not connect across prediction gaps
+                                            connectNulls={true} // Connect nulls for the main line
                                             isAnimationActive={false}
                                           />
                                            {/* Line segment specifically for predictions */}
@@ -965,4 +965,3 @@ export default function Home() {
     </div>
   );
 }
-
