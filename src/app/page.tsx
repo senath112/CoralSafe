@@ -79,7 +79,7 @@ const chartConfig: ChartConfig = {
   pHLevel: {label: "pH Level", color: "hsl(var(--chart-3))"},
   dissolvedOxygen: {label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))"},
   turbidity: {label: "Turbidity (NTU)", color: "hsl(var(--chart-5))"},
-  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--chart-1))"}, // Reusing chart color for example
+  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))"}, // Changed color
   prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>}, // Example prediction style
 } satisfies ChartConfig;
 
@@ -129,8 +129,13 @@ export default function Home() {
   };
 
   const parseData = (data: string): SensorData[] => {
+    console.log("Parsing data...");
     // Splitting by newline to separate entries
     const lines = data.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length < 2) {
+        console.warn("No data rows found after header.");
+        return [];
+    }
     const header = lines[0].split(',').map(item => item.trim());
     const expectedHeaders = ['Date', 'Location', 'Water_Temperature_C', 'Salinity_PSU', 'pH_Level', 'Dissolved_Oxygen_mg_L', 'Turbidity_NTU', 'Nitrate_mg_L'];
 
@@ -139,11 +144,11 @@ export default function Home() {
         console.warn("CSV header doesn't match expected format. Proceeding, but results might be inaccurate.");
     }
 
-
-    return lines.slice(1).map(entry => { // Skip the header row
+    const parsedEntries = lines.slice(1).map((entry, index) => { // Skip the header row
+      console.log(`Parsing line ${index + 1}: ${entry}`);
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== expectedHeaders.length) {
-         console.warn(`Skipping incomplete or malformed entry: ${entry}`);
+         console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
         return null; // Skip incomplete entries
       }
 
@@ -165,7 +170,7 @@ export default function Home() {
         isNaN(turbidityNum) ||
         isNaN(nitrateNum)
       ) {
-         console.warn(`Skipping entry with invalid numeric values: ${entry}`);
+         console.warn(`Skipping entry with invalid numeric values (line ${index + 2}): ${entry}`);
         return null;
       }
 
@@ -180,10 +185,16 @@ export default function Home() {
         nitrate: nitrateNum,
       };
     }).filter((item): item is SensorData => item !== null); // Type guard to filter out nulls
+    console.log("Parsing completed. Parsed entries:", parsedEntries);
+    return parsedEntries;
   };
 
   const trainModel = async (data: SensorData[]) => {
-    if (data.length === 0) return null; // No data to train on
+    console.log("Starting model training...");
+    if (data.length === 0) {
+      console.log("No data to train on. Skipping model training.");
+      return null; // No data to train on
+    }
 
     const numRecords = data.length;
     const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
@@ -197,9 +208,11 @@ export default function Home() {
         item.turbidity,
         item.nitrate
     ]);
+    console.log("Prepared features for training:", features);
 
 
     const inputTensor = tf.tensor2d(features, [numRecords, numFeatures]);
+    console.log("Created input tensor:", inputTensor.shape);
 
 
     // Define a simple sequential model
@@ -207,24 +220,24 @@ export default function Home() {
     model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
     model.add(tf.layers.dense({units: 32, activation: 'relu'}));
     model.add(tf.layers.dense({units: numFeatures})); // Output layer with numFeatures units
+    console.log("Defined model architecture.");
 
     // Compile the model
     model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
+    console.log("Compiled model.");
 
     // Train the model
-    // Using inputTensor as both input and target for demonstration (e.g., autoencoder-like)
-    // For time series prediction, you'd typically use sequences (e.g., predict next step based on previous steps)
     try {
+        console.log("Starting model fitting...");
         await model.fit(inputTensor, inputTensor, {
             epochs: 100,
             callbacks: {
                 onEpochEnd: (epoch, logs) => {
-                    // Optional: Log progress or update UI during training
-                    // console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
+                     console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
                 }
             }
         });
-        console.log("Model training completed.");
+        console.log("Model training completed successfully.");
         return model;
     } catch (error) {
         console.error("Error during model training:", error);
@@ -236,19 +249,37 @@ export default function Home() {
         return null;
     } finally {
         tf.dispose([inputTensor]); // Dispose tensor to free memory
+        console.log("Disposed input tensor.");
     }
   };
 
 
  const analyzeData = async () => {
+    console.log("analyzeData function called.");
+    console.log("Current sensor data state:", sensorData);
+    if (!sensorData.trim()) {
+      console.log("Sensor data is empty. Aborting analysis.");
+       toast({
+         title: 'Input Error',
+         description: 'Please paste sensor data before analyzing.',
+         variant: 'destructive',
+       });
+      return;
+    }
+
     setIsLoading(true);
     setAnalysisProgress(0);
     setAnalysisResults([]); // Clear previous results
+    console.log("Set loading state to true and cleared previous results.");
     csvDataRef.current = sensorData; // Store raw CSV data if needed
 
     try {
+        console.log("Parsing sensor data...");
         const parsedData = parseData(sensorData);
+        console.log("Parsed data:", parsedData);
+
         if (!parsedData || parsedData.length === 0) {
+            console.log("No valid data after parsing.");
             toast({
                 title: 'Error',
                 description: 'No valid data found or data format is incorrect. Please check your input.',
@@ -259,20 +290,25 @@ export default function Home() {
         }
 
         // Train the model first
+        console.log("Training model...");
         const trainedModel = await trainModel(parsedData);
         setModel(trainedModel); // Save the trained model
+        console.log("Model training finished. Trained model:", trainedModel);
 
         // Process each data point for suitability analysis
+        console.log("Analyzing each data point for suitability...");
         const detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
+            console.log(`Analyzing data point ${index}:`, data);
             const {isSuitable, summary, threateningFactors} = analyzeSensorData(
                 data,
                 sensorDataThresholds
             );
             const suitabilityIndex = calculateSuitabilityIndex(data, sensorDataThresholds);
+             console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
 
             let improvements: string[] = [];
              if (!isSuitable) {
-                // Generate improvements based on threatening factors
+                 console.log(`Generating improvements for unsuitable point ${index}`);
                  improvements = Object.entries(threateningFactors)
                  .filter(([_, value]) => value) // Filter only true (threatening) factors
                  .map(([key]) => {
@@ -287,15 +323,18 @@ export default function Home() {
                      }
                  });
                  if (improvements.length === 0) {
-                    improvements = ["Consider general water quality improvements."]; // Fallback if no specific factors identified
+                    improvements = ["Consider general water quality improvements."]; // Fallback
                  }
+                 console.log(`Improvements for point ${index}:`, improvements);
             } else {
                  improvements = ["Environment appears suitable, continue monitoring."];
             }
 
 
-            // Update progress (can be more sophisticated)
-            setAnalysisProgress(((index + 1) / parsedData.length) * 50); // 50% for analysis
+            // Update progress
+            const currentProgress = ((index + 1) / parsedData.length) * 50;
+            setAnalysisProgress(currentProgress);
+            console.log(`Analysis progress: ${currentProgress.toFixed(0)}%`);
 
             return {
                 ...data,
@@ -306,61 +345,67 @@ export default function Home() {
                 isPrediction: false,
             };
         });
+        console.log("Finished suitability analysis for all data points.");
 
         // Perform predictions only if the model was trained successfully
         if (trainedModel) {
+            console.log("Starting predictions...");
             const numPredictions = 5;
-            let currentInputData = parsedData[parsedData.length - 1]; // Start prediction from the last actual data point
-            let allDataForPrediction = [...parsedData]; // Includes historical data
+            let currentInputDataArray = [...parsedData]; // Start with all historical data
 
             for (let i = 0; i < numPredictions; i++) {
-                 // Prepare input for prediction using the relevant historical window
+                 console.log(`Predicting step P${i + 1}`);
+                 // Prepare input tensor from the *current* state of the data including previous predictions
+                 const lastKnownData = currentInputDataArray[currentInputDataArray.length - 1];
                  const featuresToPredict = [
-                    currentInputData.waterTemperature,
-                    currentInputData.salinity,
-                    currentInputData.pHLevel,
-                    currentInputData.dissolvedOxygen,
-                    currentInputData.turbidity,
-                    currentInputData.nitrate,
+                    lastKnownData.waterTemperature,
+                    lastKnownData.salinity,
+                    lastKnownData.pHLevel,
+                    lastKnownData.dissolvedOxygen,
+                    lastKnownData.turbidity,
+                    lastKnownData.nitrate,
                  ];
                  const inputTensor = tf.tensor2d([featuresToPredict], [1, 6]);
+                 console.log(`Input for prediction P${i + 1}:`, featuresToPredict);
 
 
                 // Generate prediction
                  const predictionTensor = trainedModel.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-                 const predictedValues = await predictionTensor.data();
+                 const predictedValuesRaw = await predictionTensor.data();
                  tf.dispose([inputTensor, predictionTensor]); // Dispose tensors
+                 console.log(`Raw predicted values for P${i + 1}:`, predictedValuesRaw);
 
-
-                // Create the prediction result object
-                const predictionTime = `P${i + 1}`;
+                 // Add slight random variations for realism
                 const predictedResult: AnalysisResult = {
-                    time: predictionTime,
-                    location: currentInputData.location, // Assume same location for predictions
-                    waterTemperature: predictedValues[0] + (Math.random() - 0.5) * 0.1, // Add slight variation
-                    salinity: predictedValues[1] + (Math.random() - 0.5) * 0.1,
-                    pHLevel: predictedValues[2] + (Math.random() - 0.5) * 0.01,
-                    dissolvedOxygen: predictedValues[3] + (Math.random() - 0.5) * 0.1,
-                    turbidity: predictedValues[4] + (Math.random() - 0.5) * 0.05,
-                    nitrate: predictedValues[5] + (Math.random() - 0.5) * 0.01,
+                    time: `P${i + 1}`,
+                    location: lastKnownData.location, // Assume same location
+                    waterTemperature: predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1,
+                    salinity: predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1,
+                    pHLevel: predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01,
+                    dissolvedOxygen: predictedValuesRaw[3] + (Math.random() - 0.5) * 0.1,
+                    turbidity: predictedValuesRaw[4] + (Math.random() - 0.5) * 0.05,
+                    nitrate: predictedValuesRaw[5] + (Math.random() - 0.5) * 0.01,
                     isSuitable: null, // Suitability is not determined for predictions
                     summary: 'Prediction',
                     improvements: [],
                     suitabilityIndex: undefined,
                     isPrediction: true,
                 };
+                 console.log(`Formatted prediction result P${i + 1}:`, predictedResult);
 
                 detailedResults.push(predictedResult);
 
-                 // Update currentInputData for the next prediction step
-                 // This makes the next prediction depend on the previous one
-                 currentInputData = { ...currentInputData, ...predictedResult };
-                 allDataForPrediction.push(currentInputData); // Add prediction to data used for next step if needed by model logic
+                 // Add this prediction to the array for the next prediction step
+                 currentInputDataArray.push(predictedResult);
 
                 // Update progress
-                setAnalysisProgress(50 + ((i + 1) / numPredictions) * 50); // 50% for predictions
+                const predictionProgress = 50 + ((i + 1) / numPredictions) * 50;
+                setAnalysisProgress(predictionProgress);
+                console.log(`Prediction progress: ${predictionProgress.toFixed(0)}%`);
             }
+            console.log("Finished predictions.");
         } else {
+             console.log("Model training failed or skipped. No predictions will be made.");
              setAnalysisProgress(100); // If no model, progress is complete after analysis
              toast({
                  title: "Prediction Skipped",
@@ -369,7 +414,7 @@ export default function Home() {
              });
         }
 
-
+        console.log("Final analysis results (including predictions):", detailedResults);
         setAnalysisResults(detailedResults);
         toast({
             title: 'Success',
@@ -384,6 +429,7 @@ export default function Home() {
             variant: 'destructive',
         });
     } finally {
+        console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
         setAnalysisProgress(100); // Ensure progress completes
     }
@@ -393,15 +439,15 @@ export default function Home() {
   return (
     <div id="report" className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
       <div className="max-w-5xl w-full space-y-8">
-        <Card>
-          <CardHeader>
+        <Card className="bg-card shadow-md rounded-md">
+           <CardHeader>
              <div className="flex items-center">
-                 <Avatar>
-                   <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full"/>
-                   <AvatarFallback>CS</AvatarFallback>
-                 </Avatar>
-                <CardTitle className="ml-4">CoralSafe: Sensor Data Analyzer</CardTitle>
-            </div>
+               <Avatar>
+                 <AvatarImage src="https://picsum.photos/50/50" alt="CoralSafe Logo" className="mr-2 rounded-full" />
+                 <AvatarFallback>CS</AvatarFallback>
+               </Avatar>
+               <CardTitle className="ml-4">CoralSafe: Sensor Data Analyzer</CardTitle>
+             </div>
 
             <CardDescription>
               <p>Sensor Data Input</p>
@@ -412,28 +458,35 @@ export default function Home() {
             <Textarea
               placeholder="Paste sensor data here"
               value={sensorData}
-              onChange={(e) => setSensorData(e.target.value)}
+              onChange={(e) => {
+                console.log("Sensor data changed:", e.target.value);
+                setSensorData(e.target.value);
+              }}
               className="min-h-[150px] text-sm p-3 border rounded-md shadow-inner focus:ring-accent focus:border-accent"
             />
             <Button
-              onClick={analyzeData}
+              onClick={() => {
+                 console.log("Analyze Data button clicked.");
+                 analyzeData();
+              }}
               disabled={isLoading || !sensorData.trim()}
               className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
+             {isLoading && (
+                 <div className="w-full px-4 mt-4">
+                     <Progress value={analysisProgress} className="w-full [&>div]:bg-accent" />
+                     <p className="text-center text-sm text-muted-foreground mt-2">Analysis Progress: {analysisProgress.toFixed(0)}%</p>
+                 </div>
+             )}
           </CardContent>
         </Card>
 
-      {isLoading && (
-         <div className="w-full px-4">
-             <Progress value={analysisProgress} className="w-full [&>div]:bg-accent" />
-             <p className="text-center text-sm text-muted-foreground mt-2">Analyzing Data: {analysisProgress.toFixed(0)}%</p>
-         </div>
-      )}
+
 
       {analysisResults.length > 0 && (
-          <Card>
+          <Card className="bg-card shadow-md rounded-md">
             <CardHeader>
                 <CardTitle>Analysis Results</CardTitle>
                 <Button onClick={downloadReport} className="mt-2 bg-accent text-accent-foreground hover:bg-accent/90" size="sm">Download Report (PDF)</Button>
@@ -441,39 +494,40 @@ export default function Home() {
             <CardContent>
               <Table className="rounded-md shadow-md border border-border">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-left font-medium border-r border-border">Time</TableHead>
-                    <TableHead className="text-left font-medium border-r border-border">Location</TableHead>
-                    <TableHead className="text-center font-medium border-r border-border">Suitability</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">Water Temp (°C)</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">Salinity (PSU)</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">pH Level</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">Oxygen (mg/L)</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">Turbidity (NTU)</TableHead>
-                    <TableHead className="text-right font-medium border-r border-border">Nitrate (mg/L)</TableHead>
-                    <TableHead className="text-left font-medium border-r border-border">Summary</TableHead>
-                    <TableHead className="text-left font-medium">Suggested Actions</TableHead>
+                  <TableRow className="border-b border-border">
+                    <TableHead className="text-left font-medium border-r border-border py-2 px-3">Time</TableHead>
+                    <TableHead className="text-left font-medium border-r border-border py-2 px-3">Location</TableHead>
+                    <TableHead className="text-center font-medium border-r border-border py-2 px-3">Suitability</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">Water Temp (°C)</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">Salinity (PSU)</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">pH Level</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">Oxygen (mg/L)</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">Turbidity (NTU)</TableHead>
+                    <TableHead className="text-right font-medium border-r border-border py-2 px-3">Nitrate (mg/L)</TableHead>
+                    <TableHead className="text-left font-medium border-r border-border py-2 px-3">Summary</TableHead>
+                    <TableHead className="text-left font-medium py-2 px-3">Suggested Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => {
                       const isIdeal = result.isSuitable === true;
                       const isWarning = result.isSuitable === false && (
-                          (result.waterTemperature >= sensorDataThresholds.temperatureCaution[0] && result.waterTemperature <= sensorDataThresholds.temperatureCaution[1]) ||
-                          (result.salinity >= sensorDataThresholds.salinityCaution[0] && result.salinity <= sensorDataThresholds.salinityCaution[1]) || (result.salinity >= sensorDataThresholds.salinityCaution[2] && result.salinity <= sensorDataThresholds.salinityCaution[3]) ||
-                          (result.pHLevel >= sensorDataThresholds.pHLevelCaution[0] && result.pHLevel <= sensorDataThresholds.pHLevelCaution[1]) ||
-                          (result.dissolvedOxygen >= sensorDataThresholds.dissolvedOxygenCaution[0] && result.dissolvedOxygen <= sensorDataThresholds.dissolvedOxygenCaution[1]) ||
-                          (result.turbidity >= sensorDataThresholds.turbidityCaution[0] && result.turbidity <= sensorDataThresholds.turbidityCaution[1]) ||
-                          (result.nitrate >= sensorDataThresholds.nitrateCaution[0] && result.nitrate <= sensorDataThresholds.nitrateCaution[1])
+                          (result.waterTemperature > sensorDataThresholds.temperatureIdeal[1] && result.waterTemperature <= sensorDataThresholds.temperatureCaution[1]) ||
+                          ((result.salinity >= sensorDataThresholds.salinityCaution[0] && result.salinity < sensorDataThresholds.salinityIdeal[0]) || (result.salinity > sensorDataThresholds.salinityIdeal[1] && result.salinity <= sensorDataThresholds.salinityCaution[3])) ||
+                          (result.pHLevel >= sensorDataThresholds.pHLevelCaution[0] && result.pHLevel < sensorDataThresholds.pHLevelIdeal[0]) ||
+                          (result.dissolvedOxygen >= sensorDataThresholds.dissolvedOxygenCaution[0] && result.dissolvedOxygen < sensorDataThresholds.dissolvedOxygenIdeal) ||
+                          (result.turbidity > sensorDataThresholds.turbidityIdeal && result.turbidity <= sensorDataThresholds.turbidityCaution[1]) ||
+                          (result.nitrate > sensorDataThresholds.nitrateIdeal && result.nitrate <= sensorDataThresholds.nitrateCaution[1])
                       );
-                      const isPrediction = result.isSuitable === null;
-                      const isThreatening = !isIdeal && !isWarning && !isPrediction;
+                      const isPrediction = result.isPrediction === true;
+                       // Threatening is when isSuitable is false AND it's not just a warning
+                      const isThreatening = result.isSuitable === false && !isWarning;
 
 
                       let suitabilityClass = '';
                       let suitabilityText = '';
                       if (isPrediction) {
-                        suitabilityClass = 'bg-gray-200 text-gray-800'; // Or another distinct style
+                        suitabilityClass = 'bg-gray-200 text-gray-800'; // Distinct style for predictions
                         suitabilityText = 'Prediction';
                       } else if (isIdeal) {
                         suitabilityClass = 'bg-green-200 text-green-800';
@@ -481,7 +535,7 @@ export default function Home() {
                       } else if (isWarning) {
                         suitabilityClass = 'bg-yellow-200 text-yellow-800';
                         suitabilityText = 'Warning';
-                      } else { // Threatening
+                      } else { // Must be Threatening
                         suitabilityClass = 'bg-red-200 text-red-800';
                         suitabilityText = 'Threatening';
                       }
@@ -489,20 +543,20 @@ export default function Home() {
 
                     return (
                       <TableRow key={index} className="border-b border-border last:border-0 hover:bg-muted/50">
-                        <TableCell className="py-2 border-r border-border">{result.time}</TableCell>
-                        <TableCell className="py-2 border-r border-border">{result.location}</TableCell>
-                        <TableCell className={`py-2 text-center border-r border-border`}>
+                        <TableCell className="py-2 border-r border-border px-3">{result.time}</TableCell>
+                        <TableCell className="py-2 border-r border-border px-3">{result.location}</TableCell>
+                        <TableCell className={`py-2 text-center border-r border-border px-3`}>
                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${suitabilityClass}`}>
                                 {suitabilityText} {result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : ''}
                             </span>
                         </TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.waterTemperature.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.salinity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.pHLevel.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.dissolvedOxygen.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.turbidity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-border">{result.nitrate.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 border-r border-border">
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.waterTemperature.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.salinity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.pHLevel.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.dissolvedOxygen.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.turbidity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-border px-3">{result.nitrate.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 border-r border-border px-3">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
                                 <AccordionTrigger className="py-1 text-xs hover:no-underline">View</AccordionTrigger>
@@ -512,7 +566,7 @@ export default function Home() {
                               </AccordionItem>
                             </Accordion>
                         </TableCell>
-                         <TableCell className="py-2">
+                         <TableCell className="py-2 px-3">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
                                 <AccordionTrigger className="py-1 text-xs hover:no-underline">View Actions</AccordionTrigger>
@@ -553,7 +607,7 @@ export default function Home() {
                             <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart
-                                      data={analysisResults}
+                                      data={analysisResults} // Use combined results
                                       margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
                                     >
                                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -565,40 +619,45 @@ export default function Home() {
                                              wrapperStyle={{ outline: "none", boxShadow: "0px 2px 8px rgba(0,0,0,0.15)", borderRadius: "0.5rem", backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))"}}
                                         />
                                       <RechartsLegend content={<ChartLegendContent />} />
+                                      {/* Line for actual data */}
                                       <Line
-                                        dataKey={parameter.key}
+                                        dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Only plot non-predictions
                                         type="monotone"
-                                        stroke={`hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`} // Cycle through chart colors
+                                        stroke={parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`}
                                         strokeWidth={2}
-                                        dot={{
-                                            r: 3,
-                                            fill: `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`,
-                                            strokeWidth: 1,
-                                            stroke: `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`
+                                        dot={(props) => {
+                                            const { cx, cy, payload } = props;
+                                             // Don't render dots for prediction points on the actual data line
+                                            if (!payload.isPrediction) {
+                                                 const color = parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`;
+                                                return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
+                                            }
+                                            return null;
                                         }}
                                          activeDot={{ r: 5, fill: "hsl(var(--primary))", stroke: "hsl(var(--primary))" }}
                                         name={parameter.name}
-                                        connectNulls // Connect lines even if there are null prediction points in between
-                                        isAnimationActive={false} // Disable animation for performance with potentially many points
+                                        connectNulls={false} // Do not connect across prediction gaps
+                                        isAnimationActive={false}
                                       />
                                        {/* Line segment specifically for predictions */}
                                        <Line
-                                            dataKey={parameter.key}
-                                            stroke={`hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`} // Use same base color
+                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : null} // Only plot predictions
+                                            stroke={parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`} // Use same base color
                                             strokeWidth={2}
                                             strokeDasharray="5 5" // Dashed line for predictions
                                             dot={(props) => {
                                                 const { cx, cy, payload } = props;
                                                 // Only render dots for prediction points
                                                 if (payload.isPrediction) {
-                                                    return <circle cx={cx} cy={cy} r={3} fill={"hsl(var(--accent))"} stroke={"hsl(var(--accent))"} strokeWidth={1} />;
+                                                    const color = parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`;
+                                                    return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
                                                 }
-                                                return null; // Don't render dots for non-prediction points on this line
+                                                return null;
                                             }}
                                             activeDot={false} // No active dot effect for prediction line segment
-                                            connectNulls
+                                            connectNulls={false} // Do not connect nulls (predictions start after actual data)
                                             name={`${parameter.name} (Prediction)`}
-                                            legendType="none" // Hide this segment from the default legend
+                                            // legendType="none" // Optionally hide from legend if desired
                                             isAnimationActive={false}
                                          />
 
