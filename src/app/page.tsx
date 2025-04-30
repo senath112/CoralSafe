@@ -61,6 +61,11 @@ interface SensorData {
   nitrate: number;
 }
 
+interface NormalizationParams {
+  min: tf.Tensor;
+  max: tf.Tensor;
+}
+
 const sensorDataThresholds = defineSensorDataThresholds();
 
 const parameters = [
@@ -86,7 +91,7 @@ const chartConfig: ChartConfig = {
 export default function Home() {
   const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
-  const [model, setModel] = useState<tf.Sequential | null>(null);
+  const [model, setModel] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null); // Store model and norm params
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const {toast} = useToast();
@@ -189,14 +194,26 @@ export default function Home() {
     return parsedEntries;
   };
 
-  const trainModel = async (data: SensorData[]) => {
+  // Function to normalize data using Min-Max scaling
+  const normalizeData = (tensor: tf.Tensor): { normalized: tf.Tensor; normParams: NormalizationParams } => {
+    const min = tensor.min(0);
+    const max = tensor.max(0);
+    const normalized = tensor.sub(min).div(max.sub(min));
+    return { normalized, normParams: { min, max } };
+  };
+
+  // Function to denormalize data
+  const denormalizeData = (tensor: tf.Tensor, normParams: NormalizationParams): tf.Tensor => {
+    return tensor.mul(normParams.max.sub(normParams.min)).add(normParams.min);
+  };
+
+  const trainModel = async (data: SensorData[]): Promise<{ model: tf.Sequential; normParams: NormalizationParams } | null> => {
     console.log("Starting model training...");
     if (data.length === 0) {
       console.log("No data to train on. Skipping model training.");
       return null; // No data to train on
     }
 
-    const numRecords = data.length;
     const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
 
     // Prepare data for TensorFlow.js
@@ -210,9 +227,14 @@ export default function Home() {
     ]);
     console.log("Prepared features for training:", features);
 
-
-    const inputTensor = tf.tensor2d(features, [numRecords, numFeatures]);
+    const inputTensor = tf.tensor2d(features); // Shape: [numRecords, numFeatures]
     console.log("Created input tensor:", inputTensor.shape);
+
+    // Normalize the data
+    const { normalized: normalizedTensor, normParams } = normalizeData(inputTensor);
+    console.log("Normalized input tensor:", normalizedTensor.shape);
+    console.log("Normalization params (min):", await normParams.min.data());
+    console.log("Normalization params (max):", await normParams.max.data());
 
 
     // Define a simple sequential model
@@ -226,11 +248,11 @@ export default function Home() {
     model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
     console.log("Compiled model.");
 
-    // Train the model
+    // Train the model on NORMALIZED data
     try {
         console.log("Starting model fitting...");
-        await model.fit(inputTensor, inputTensor, {
-            epochs: 100,
+        await model.fit(normalizedTensor, normalizedTensor, {
+            epochs: 150, // Increased epochs slightly
             callbacks: {
                 onEpochEnd: (epoch, logs) => {
                      console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
@@ -238,7 +260,8 @@ export default function Home() {
             }
         });
         console.log("Model training completed successfully.");
-        return model;
+        // Return the model AND normalization parameters
+        return { model, normParams };
     } catch (error) {
         console.error("Error during model training:", error);
         toast({
@@ -248,8 +271,8 @@ export default function Home() {
         });
         return null;
     } finally {
-        tf.dispose([inputTensor]); // Dispose tensor to free memory
-        console.log("Disposed input tensor.");
+        tf.dispose([inputTensor, normalizedTensor]); // Dispose tensors
+        console.log("Disposed input and normalized tensors.");
     }
   };
 
@@ -291,9 +314,9 @@ export default function Home() {
 
         // Train the model first
         console.log("Training model...");
-        const trainedModel = await trainModel(parsedData);
-        setModel(trainedModel); // Save the trained model
-        console.log("Model training finished. Trained model:", trainedModel);
+        const trainingResult = await trainModel(parsedData);
+        setModel(trainingResult); // Save the trained model and norm params
+        console.log("Model training finished. Training result:", trainingResult);
 
         // Process each data point for suitability analysis
         console.log("Analyzing each data point for suitability...");
@@ -348,10 +371,11 @@ export default function Home() {
         console.log("Finished suitability analysis for all data points.");
 
         // Perform predictions only if the model was trained successfully
-        if (trainedModel) {
+        if (trainingResult) {
             console.log("Starting predictions...");
+            const { model: trainedModel, normParams } = trainingResult;
             const numPredictions = 5;
-            let currentInputDataArray = [...parsedData]; // Start with all historical data
+            let currentInputDataArray = [...detailedResults]; // Start with all historical data (now includes analysis results)
 
             for (let i = 0; i < numPredictions; i++) {
                  console.log(`Predicting step P${i + 1}`);
@@ -365,26 +389,37 @@ export default function Home() {
                     lastKnownData.turbidity,
                     lastKnownData.nitrate,
                  ];
-                 const inputTensor = tf.tensor2d([featuresToPredict], [1, 6]);
-                 console.log(`Input for prediction P${i + 1}:`, featuresToPredict);
+                 const inputTensorRaw = tf.tensor2d([featuresToPredict]); // Shape: [1, numFeatures]
+                 console.log(`Raw input for prediction P${i + 1}:`, featuresToPredict);
+
+                 // Normalize the input for prediction using the saved normParams
+                 const inputTensorNormalized = inputTensorRaw.sub(normParams.min).div(normParams.max.sub(normParams.min));
+                 console.log(`Normalized input for prediction P${i + 1}:`, await inputTensorNormalized.data());
 
 
-                // Generate prediction
-                 const predictionTensor = trainedModel.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-                 const predictedValuesRaw = await predictionTensor.data();
-                 tf.dispose([inputTensor, predictionTensor]); // Dispose tensors
-                 console.log(`Raw predicted values for P${i + 1}:`, predictedValuesRaw);
+                // Generate prediction (output will be normalized)
+                 const predictionTensorNormalized = trainedModel.predict(inputTensorNormalized) as tf.Tensor<tf.Rank.R2>;
+                 console.log(`Normalized prediction P${i + 1}:`, await predictionTensorNormalized.data());
 
-                 // Add slight random variations for realism
+                 // De-normalize the prediction
+                 const predictionTensorDenormalized = denormalizeData(predictionTensorNormalized, normParams);
+                 const predictedValuesRaw = await predictionTensorDenormalized.data();
+                 console.log(`De-normalized predicted values for P${i + 1}:`, predictedValuesRaw);
+
+
+                 tf.dispose([inputTensorRaw, inputTensorNormalized, predictionTensorNormalized, predictionTensorDenormalized]); // Dispose tensors
+
+                 // Add slight random variations for realism AFTER de-normalization
                 const predictedResult: AnalysisResult = {
                     time: `P${i + 1}`,
                     location: lastKnownData.location, // Assume same location
-                    waterTemperature: predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1,
-                    salinity: predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1,
-                    pHLevel: predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01,
-                    dissolvedOxygen: predictedValuesRaw[3] + (Math.random() - 0.5) * 0.1,
-                    turbidity: predictedValuesRaw[4] + (Math.random() - 0.5) * 0.05,
-                    nitrate: predictedValuesRaw[5] + (Math.random() - 0.5) * 0.01,
+                    // Apply variations to de-normalized values
+                    waterTemperature: Math.max(0, predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1),
+                    salinity: Math.max(0, predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1),
+                    pHLevel: Math.max(0, predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01),
+                    dissolvedOxygen: Math.max(0, predictedValuesRaw[3] + (Math.random() - 0.5) * 0.1),
+                    turbidity: Math.max(0, predictedValuesRaw[4] + (Math.random() - 0.5) * 0.05),
+                    nitrate: Math.max(0, predictedValuesRaw[5] + (Math.random() - 0.5) * 0.01),
                     isSuitable: null, // Suitability is not determined for predictions
                     summary: 'Prediction',
                     improvements: [],
@@ -465,10 +500,7 @@ export default function Home() {
               className="min-h-[150px] text-sm p-3 border rounded-md shadow-inner focus:ring-accent focus:border-accent"
             />
             <Button
-              onClick={() => {
-                 console.log("Analyze Data button clicked.");
-                 analyzeData();
-              }}
+              onClick={analyzeData} // Correctly bind the function
               disabled={isLoading || !sensorData.trim()}
               className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
@@ -571,7 +603,7 @@ export default function Home() {
                               <AccordionItem value="item-1" className="border-b-0">
                                 <AccordionTrigger className="py-1 text-xs hover:no-underline">View Actions</AccordionTrigger>
                                 <AccordionContent>
-                                   <ul className="list-disc pl-5 text-xs">
+                                   <ul className="list-disc pl-5 text-xs space-y-1">
                                        {result.improvements && result.improvements.length > 0 ? (
                                            result.improvements.map((improvement, i) => (
                                                <li key={i}>{improvement}</li>
@@ -623,13 +655,13 @@ export default function Home() {
                                       <Line
                                         dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Only plot non-predictions
                                         type="monotone"
-                                        stroke={parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`}
+                                        stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                         strokeWidth={2}
                                         dot={(props) => {
                                             const { cx, cy, payload } = props;
                                              // Don't render dots for prediction points on the actual data line
                                             if (!payload.isPrediction) {
-                                                 const color = parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`;
+                                                 const color = chartConfig[parameter.key]?.color || '#8884d8';
                                                 return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
                                             }
                                             return null;
@@ -642,14 +674,14 @@ export default function Home() {
                                        {/* Line segment specifically for predictions */}
                                        <Line
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : null} // Only plot predictions
-                                            stroke={parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`} // Use same base color
+                                            stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                             strokeWidth={2}
                                             strokeDasharray="5 5" // Dashed line for predictions
                                             dot={(props) => {
                                                 const { cx, cy, payload } = props;
                                                 // Only render dots for prediction points
                                                 if (payload.isPrediction) {
-                                                    const color = parameter.key === 'nitrate' ? 'hsl(var(--accent))' : `hsl(var(--chart-${parameters.findIndex(p => p.key === parameter.key) + 1}))`;
+                                                    const color = chartConfig[parameter.key]?.color || '#8884d8';
                                                     return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
                                                 }
                                                 return null;
