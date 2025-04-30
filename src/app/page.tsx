@@ -13,9 +13,8 @@ import {
   ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-  ChartStyle,
-  ChartConfig
 } from '@/components/ui/chart'; // Corrected import path
+import type { ChartConfig } from "@/components/ui/chart"; // Import ChartConfig type
 import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer} from 'recharts'; // Keep Recharts imports if needed for customization
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
@@ -25,11 +24,9 @@ import {
   Table,
   TableHeader,
   TableBody,
-  TableFooter,
   TableHead,
   TableRow,
   TableCell,
-  TableCaption,
 } from "@/components/ui/table"; // Ensure Table components are imported
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -112,14 +109,27 @@ export default function Home() {
       return;
     }
 
-    html2canvas(input, {scale: 2, backgroundColor: getComputedStyle(document.body).getPropertyValue('--background-raw') || '#F5F5DC'}) // Use background color for canvas
+    html2canvas(input, {scale: 2, useCORS: true, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#f0f0f0'}) // Use background color for canvas
       .then((canvas) => {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const imgProps = pdf.getImageProperties(imgData);
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        let heightLeft = pdfHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+        }
+
         pdf.save('coral_safe_report.pdf');
         toast({
           title: 'Success',
@@ -347,7 +357,7 @@ export default function Home() {
 
         // Process each data point for suitability analysis
         console.log("Analyzing each data point for suitability...");
-        const detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
+        let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
             console.log(`Analyzing data point ${index}:`, data);
             const {isSuitable, summary, threateningFactors} = analyzeSensorData(
                 data,
@@ -357,7 +367,7 @@ export default function Home() {
              console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
 
             let improvements: string[] = [];
-             if (!isSuitable) {
+             if (isSuitable === false) { // Check explicitly for false, as null means prediction
                  console.log(`Generating improvements for unsuitable point ${index}`);
                  improvements = Object.entries(threateningFactors)
                  .filter(([_, value]) => value) // Filter only true (threatening) factors
@@ -378,8 +388,10 @@ export default function Home() {
                     improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
                  }
                  console.log(`Improvements for point ${index}:`, improvements);
-            } else {
+            } else if (isSuitable === true) {
                  improvements = ["Environment appears suitable, continue monitoring."];
+            } else {
+                 improvements = []; // No improvements for predictions (isSuitable is null)
             }
 
 
@@ -405,7 +417,8 @@ export default function Home() {
             const { model: trainedModel, normParams } = trainingResult;
             const numPredictions = 5;
             // IMPORTANT: Make a deep copy for iterative prediction
-             let currentInputDataArray = JSON.parse(JSON.stringify(detailedResults));
+             let currentInputDataArray: AnalysisResult[] = JSON.parse(JSON.stringify(detailedResults));
+             let predictedResults: AnalysisResult[] = [];
 
             for (let i = 0; i < numPredictions; i++) {
                  console.log(`Predicting step P${i + 1}`);
@@ -455,14 +468,15 @@ export default function Home() {
                         isSuitable: null, // Suitability is not determined for predictions
                         summary: 'Prediction',
                         improvements: [],
-                        suitabilityIndex: undefined,
+                        suitabilityIndex: undefined, // No suitability index for predictions
                         isPrediction: true,
                     };
                      console.log(`Formatted prediction result P${i + 1}:`, predictedResult);
 
-                    detailedResults.push(predictedResult);
+                    predictedResults.push(predictedResult);
 
                      // Add this prediction to the array for the next prediction step's input
+                     // **Crucially, use the predicted data for the next prediction**
                      currentInputDataArray.push(predictedResult);
 
                  } finally {
@@ -480,8 +494,16 @@ export default function Home() {
                 console.log(`Prediction progress: ${predictionProgress.toFixed(0)}%`);
             }
             // Dispose the normalization parameter tensors after all predictions are done
-            tf.dispose([normParams.min, normParams.max]);
-            console.log("Disposed normalization parameter tensors.");
+             if (normParams) {
+                tf.dispose([normParams.min, normParams.max]);
+                console.log("Disposed normalization parameter tensors.");
+             } else {
+                 console.warn("Normalization parameters were null, cannot dispose.");
+             }
+
+             // Combine original analyzed results with new predictions
+             detailedResults = [...detailedResults, ...predictedResults];
+
             console.log("Finished predictions.");
         } else {
              console.log("Model training failed or skipped. No predictions will be made.");
@@ -511,9 +533,10 @@ export default function Home() {
     } finally {
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
-        if (analysisProgress < 100 && analysisResults.length > 0) {
-            setAnalysisProgress(100); // Ensure progress completes if successful
-        }
+        // Ensure progress completes if successful or if it stopped partway
+        if (!isLoading && analysisProgress < 100) {
+             setAnalysisProgress(100);
+         }
     }
 };
 
@@ -548,16 +571,16 @@ export default function Home() {
         <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
            <CardHeader>
              <div className="flex items-center mb-4">
-               <Avatar className="border-2 border-cyan-300">
-                 <AvatarImage src="https://picsum.photos/seed/coral/50/50" alt="CoralSafe Logo" className="rounded-full" />
+               <Avatar>
+                 <AvatarImage src="https://picsum.photos/seed/coral/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-               <CardTitle className="ml-4 text-2xl font-semibold">CoralSafe: Sensor Data Analyzer</CardTitle>
+                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
              </div>
 
             <CardDescription className="text-muted-foreground text-sm">
-              <p className="font-medium mb-1">Paste your CSV sensor data below.</p>
-              <p>Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></p>
+              <p className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</p>
+              <p className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></p>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -591,7 +614,7 @@ export default function Home() {
       {analysisResults.length > 0 && (
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xl font-semibold">Analysis Results</CardTitle>
+                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
                 <Button onClick={downloadReport} className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm" size="sm">
                     <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
                  </Button>
@@ -601,80 +624,76 @@ export default function Home() {
               <Table className="min-w-full">
                 <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                   <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Time</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Location</TableHead>
-                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Suitability</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Water Temp (°C)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Salinity (PSU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">pH Level</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Oxygen (mg/L)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Turbidity (NTU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Nitrate (mg/L)</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Summary</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4">Suggested Actions</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead>
+                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => {
-                      const isIdeal = result.isSuitable === true;
-                       const isWarning = result.isSuitable === false && (
-                          (result.waterTemperature > sensorDataThresholds.temperatureIdeal[1] && result.waterTemperature <= sensorDataThresholds.temperatureCaution[1]) ||
-                          (result.waterTemperature < sensorDataThresholds.temperatureIdeal[0] ) || // Add check for below ideal
-                          ((result.salinity >= sensorDataThresholds.salinityCaution[0] && result.salinity < sensorDataThresholds.salinityIdeal[0]) || (result.salinity > sensorDataThresholds.salinityIdeal[1] && result.salinity <= sensorDataThresholds.salinityCaution[3])) ||
-                          (result.pHLevel >= sensorDataThresholds.pHLevelCaution[0] && result.pHLevel < sensorDataThresholds.pHLevelIdeal[0]) ||
-                          (result.dissolvedOxygen >= sensorDataThresholds.dissolvedOxygenCaution[0] && result.dissolvedOxygen < sensorDataThresholds.dissolvedOxygenIdeal) ||
-                          (result.turbidity > sensorDataThresholds.turbidityIdeal && result.turbidity <= sensorDataThresholds.turbidityCaution[1]) ||
-                          (result.nitrate > sensorDataThresholds.nitrateIdeal && result.nitrate <= sensorDataThresholds.nitrateCaution[1])
-                       ) && // Ensure it's not fully threatening
-                       !(
-                          result.waterTemperature > sensorDataThresholds.temperatureCaution[1] ||
-                          result.salinity < sensorDataThresholds.salinityCaution[0] || result.salinity > sensorDataThresholds.salinityCaution[3] ||
-                          result.pHLevel < sensorDataThresholds.pHLevelCaution[0] ||
-                          result.dissolvedOxygen < sensorDataThresholds.dissolvedOxygenCaution[0] ||
-                          result.turbidity > sensorDataThresholds.turbidityCaution[1] ||
-                          result.nitrate > sensorDataThresholds.nitrateCaution[1]
-                       );
-                      const isPrediction = result.isPrediction === true;
-                       // Threatening is when isSuitable is false AND it's not just a warning
-                      const isThreatening = result.isSuitable === false && !isWarning;
-
-
+                      const isPrediction = result.isSuitable === null; // Check if it's a prediction
                       let suitabilityClass = '';
                       let suitabilityText = '';
+                      let suitabilityIndexText = result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : '';
+
+
                       if (isPrediction) {
-                        suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'; // Distinct style for predictions
-                        suitabilityText = 'Prediction';
-                      } else if (isIdeal) {
-                        suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
-                        suitabilityText = 'Suitable';
-                      } else if (isWarning) {
-                        suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
-                        suitabilityText = 'Warning';
-                      } else { // Must be Threatening
-                        suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
-                        suitabilityText = 'Threatening';
-                      }
+                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+                          suitabilityText = 'Prediction';
+                          suitabilityIndexText = ''; // No index for predictions
+                      } else {
+                           const isIdeal = result.isSuitable === true;
+                           const isThreatening = result.isSuitable === false && (
+                                threateningFactorsExist(analyzeSensorData(result, sensorDataThresholds).threateningFactors)
+                           );
+                           // Warning is when not ideal, not prediction, and not threatening
+                           const isWarning = !isIdeal && !isPrediction && !isThreatening;
+
+                           if (isIdeal) {
+                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
+                               suitabilityText = 'Suitable';
+                           } else if (isWarning) {
+                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
+                               suitabilityText = 'Warning';
+                           } else { // Must be Threatening
+                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
+                               suitabilityText = 'Threatening';
+                           }
+                       }
+
+                        // Helper function to check if any threatening factors are true
+                        function threateningFactorsExist(factors: AnalysisResult['threateningFactors']): boolean {
+                           return Object.values(factors || {}).some(value => value === true);
+                        }
 
 
                     return (
                       <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.time}</TableCell>
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.location}</TableCell>
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell>
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell>
                         <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
-                                {suitabilityText} {result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : ''}
+                                {suitabilityText} {suitabilityIndexText}
                             </span>
                         </TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.waterTemperature.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.salinity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.pHLevel.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.dissolvedOxygen.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.turbidity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">{result.nitrate.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell>
                         <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500">View</AccordionTrigger>
+                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger>
                                 <AccordionContent className="text-xs pt-1 pb-2 text-muted-foreground">
                                   {result.summary || 'N/A'}
                                 </AccordionContent>
@@ -684,7 +703,7 @@ export default function Home() {
                          <TableCell className="py-2 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500">View Actions</AccordionTrigger>
+                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger>
                                 <AccordionContent>
                                    <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
                                        {result.improvements && result.improvements.length > 0 ? (
@@ -715,7 +734,7 @@ export default function Home() {
                 {parameters.map((parameter) => (
                      <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
                         <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between">
+                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
                                 <div className="flex items-center">
                                     <parameter.icon className="w-5 h-5 mr-2 text-cyan-500"/>
                                     {parameter.name} Trends
@@ -733,13 +752,13 @@ export default function Home() {
                                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                                         >
                                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/>
-                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12}} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/>
+                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
                                            <RechartsTooltip
                                                 content={
                                                     <ChartTooltipContent
                                                         indicator="dot"
-                                                        labelClassName="text-sm font-medium"
+                                                        labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label is also foreground
                                                         className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm"
                                                     />
                                                 }
@@ -756,7 +775,8 @@ export default function Home() {
                                                 const { cx, cy, payload } = props;
                                                 if (!payload.isPrediction) {
                                                     let color = chartConfig[parameter.key]?.color || '#8884d8';
-                                                     if (parameter.key === 'nitrate') {
+                                                    // Override for nitrate to use accent
+                                                    if (parameter.key === 'nitrate') {
                                                         color = 'hsl(var(--accent))';
                                                     }
                                                     return <circle cx={cx} cy={cy} r={4} fill={color} stroke={'hsl(var(--background))'} strokeWidth={1.5} />;
@@ -779,9 +799,10 @@ export default function Home() {
                                                     // Only render dots for prediction points
                                                     if (payload.isPrediction) {
                                                          let color = chartConfig[parameter.key]?.color || '#8884d8';
+                                                          // Ensure nitrate points use accent color for predictions too
                                                           if (parameter.key === 'nitrate') {
-                                                            color = 'hsl(var(--accent))'; // Ensure nitrate points use accent color for predictions too
-                                                        }
+                                                            color = 'hsl(var(--accent))'; // Use accent color for nitrate predictions
+                                                          }
                                                          return <circle cx={cx} cy={cy} r={4} fill={color} stroke={'hsl(var(--background))'} strokeWidth={1.5} />;
                                                     }
                                                     return null;
@@ -806,15 +827,15 @@ export default function Home() {
       {analysisResults.length > 0 && (
           <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader>
-                <CardTitle className="text-xl font-semibold">Parameter Ranges for Coral Health</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
+                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
                <div className="overflow-x-auto">
                <Table className="min-w-full">
                     <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30">Parameter</TableHead>
+                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
@@ -822,40 +843,40 @@ export default function Home() {
                     </TableHeader>
                      <TableBody>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">Water Temperature (°C)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">24-28</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">28-30</TableCell>
-                            <TableCell className="text-center py-2 px-4">Above 30 (Bleaching risk)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell>
                         </TableRow>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">Salinity (PSU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">33-36</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">31-33 or 36-38</TableCell>
-                            <TableCell className="text-center py-2 px-4">Below 31 or Above 38</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">pH Level</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">8.0-8.3</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">7.8-8.0</TableCell>
-                            <TableCell className="text-center py-2 px-4">Below 7.8 (Acidification)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">Dissolved Oxygen (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">&gt; 6.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">4.0-6.0</TableCell>
-                            <TableCell className="text-center py-2 px-4">Below 4.0 (Hypoxia)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">Turbidity (NTU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">&lt; 1.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">1.0-3.0</TableCell>
-                            <TableCell className="text-center py-2 px-4">Above 3.0</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell>
                         </TableRow>
                         <TableRow className="border-b-0"> {/* Last row no bottom border */}
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">Nitrate (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">&lt; 0.1</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4">0.1-0.3</TableCell>
-                            <TableCell className="text-center py-2 px-4">Above 0.3 (Algal blooms)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>
@@ -886,3 +907,4 @@ export default function Home() {
     </div>
   );
 }
+
