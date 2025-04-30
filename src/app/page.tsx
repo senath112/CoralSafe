@@ -109,7 +109,23 @@ export default function Home() {
       return;
     }
 
-    html2canvas(input, {scale: 2, useCORS: true, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#f0f0f0'}) // Use background color for canvas
+    // Temporarily set text to black for PDF generation
+    const originalColors = new Map<HTMLElement, string>();
+    const elementsToColor = input.querySelectorAll('.text-foreground, .text-muted-foreground, text'); // Select elements with theme colors and SVG text
+    elementsToColor.forEach(el => {
+       if (el instanceof HTMLElement || el instanceof SVGTextElement) {
+         originalColors.set(el, el.style.color);
+         el.style.color = 'black'; // Force black color
+       }
+    });
+
+
+    html2canvas(input, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff' // Force white background for PDF clarity
+        //backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#f0f0f0'
+      })
       .then((canvas) => {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -143,6 +159,19 @@ export default function Home() {
           description: 'Failed to generate PDF. Please try again.',
           variant: 'destructive',
         });
+      })
+      .finally(() => {
+         // Restore original colors
+         elementsToColor.forEach(el => {
+             if (el instanceof HTMLElement || el instanceof SVGTextElement) {
+               const originalColor = originalColors.get(el);
+               if (originalColor !== undefined) {
+                   el.style.color = originalColor;
+               } else {
+                   el.style.color = ''; // Remove inline style if none existed
+               }
+             }
+         });
       });
   };
 
@@ -389,7 +418,13 @@ export default function Home() {
                  }
                  console.log(`Improvements for point ${index}:`, improvements);
             } else if (isSuitable === true) {
-                 improvements = ["Environment appears suitable, continue monitoring."];
+                 // Check if there are any caution factors even if overall suitable
+                 const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
+                 if (cautions) {
+                     improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+                 } else {
+                     improvements = ["Environment appears ideal, continue monitoring."];
+                 }
             } else {
                  improvements = []; // No improvements for predictions (isSuitable is null)
             }
@@ -534,7 +569,7 @@ export default function Home() {
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
         // Ensure progress completes if successful or if it stopped partway
-        if (!isLoading && analysisProgress < 100) {
+        if (analysisProgress < 100) { // Check if progress needs setting to 100
              setAnalysisProgress(100);
          }
     }
@@ -650,12 +685,9 @@ export default function Home() {
                           suitabilityText = 'Prediction';
                           suitabilityIndexText = ''; // No index for predictions
                       } else {
-                           const isIdeal = result.isSuitable === true;
-                           const isThreatening = result.isSuitable === false && (
-                                threateningFactorsExist(analyzeSensorData(result, sensorDataThresholds).threateningFactors)
-                           );
-                           // Warning is when not ideal, not prediction, and not threatening
-                           const isWarning = !isIdeal && !isPrediction && !isThreatening;
+                           const isIdeal = result.isSuitable === true && !analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           const isWarning = result.isSuitable === true && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           const isThreatening = result.isSuitable === false;
 
                            if (isIdeal) {
                                suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
@@ -669,10 +701,7 @@ export default function Home() {
                            }
                        }
 
-                        // Helper function to check if any threatening factors are true
-                        function threateningFactorsExist(factors: AnalysisResult['threateningFactors']): boolean {
-                           return Object.values(factors || {}).some(value => value === true);
-                        }
+                        // Helper function removed as logic is integrated above
 
 
                     return (
@@ -742,7 +771,7 @@ export default function Home() {
                                 {/* Chevron is automatically added by AccordionTrigger */}
                             </AccordionTrigger>
                              <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
-                                <p className="text-sm text-muted-foreground mb-4">
+                                <p className="text-sm text-muted-foreground mb-4 text-foreground"> {/* Changed text color */}
                                     Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
                                 </p>
                                 <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
@@ -759,12 +788,23 @@ export default function Home() {
                                                     <ChartTooltipContent
                                                         indicator="dot"
                                                         labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label is also foreground
-                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm"
+                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground" // Set tooltip text to foreground
                                                     />
                                                 }
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
                                             />
-                                          <RechartsLegend content={<ChartLegendContent icon={chartConfig[parameter.key]?.icon} />} />
+                                          <RechartsLegend content={<ChartLegendContent icon={chartConfig[parameter.key]?.icon} nameKey={parameter.key} payload={ // Pass necessary props
+                                              Object.entries(chartConfig)
+                                                .filter(([key]) => key === parameter.key || key === 'prediction') // Only show current param and prediction legend
+                                                .map(([key, config]) => ({
+                                                  value: config.label,
+                                                  type: key === 'prediction' ? 'dashed' : 'line',
+                                                  id: key,
+                                                  color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
+                                                  icon: config.icon // Pass icon
+                                                }))
+                                            } className="text-foreground" />} // Set legend text to foreground
+                                          />
                                           {/* Line for actual data */}
                                           <Line
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Only plot non-predictions
@@ -907,4 +947,3 @@ export default function Home() {
     </div>
   );
 }
-
