@@ -82,8 +82,8 @@ We are excited to announce that **Mariana V2.0** — the next major release of o
 - 📈 **Smarter Visualizations**  
   Realistic parameter curves and real-time changes for an immersive experience.
 
-- 🧠 **RiftGuard Ready**  
-  Mariana V2.0 prepares your system for integration with **RiftGuard** — our full-stack ML engine for predictive coral defense.
+- 🧠 **ReefGuard Ready**  
+  Mariana V2.0 prepares your system for integration with **ReefGuard** (V1) — our full-stack ML engine for predictive coral defense.
 
 ---
 
