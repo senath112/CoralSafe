@@ -11,7 +11,7 @@ body {
     /* Updated Theme Colors (Sea Blue, Light Beige, Coral) */
     --background-raw: 60 33% 96%; /* Raw HSL for jsPDF background */
     --background: hsl(var(--background-raw)); /* Light beige */
-    --foreground: hsl(160, 42%, 10%); /* Darker Sea blue (almost black) for better text contrast */
+    --foreground: hsl(0 0% 0%); /* Black text */
 
     --card: hsl(var(--background));
     --card-foreground: hsl(var(--foreground)); /* Card text uses foreground */
@@ -26,7 +26,7 @@ body {
     --secondary-foreground: hsl(var(--foreground)); /* Secondary text uses foreground */
 
     --muted: hsl(60, 20%, 90%); /* Use secondary for muted */
-    --muted-foreground: hsl(160, 15%, 45%); /* Muted sea blue */
+    --muted-foreground: hsl(0 0% 40%); /* Dark gray for muted text */
 
     --accent: hsl(16, 80%, 60%); /* Coral - slightly adjusted */
     --accent-foreground: hsl(0, 0%, 100%); /* White text on accent */
@@ -133,3 +133,4 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary) / 0.8);
 }
+

@@ -593,10 +593,10 @@ export default function Home() {
 
 
   return (
-    <div id="report" className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-white">
+    <div id="report" className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground"> {/* Added text-foreground */}
 
       {/* Header Section */}
-      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm">
+      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm"> {/* Header text remains white */}
          <div className="flex items-center justify-center mb-2">
             <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
             <h1 className="text-4xl font-bold">CoralGuard</h1>
@@ -619,19 +619,19 @@ export default function Home() {
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
-        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
+        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30"> {/* Card text uses foreground */}
            <CardHeader>
              <div className="flex items-center mb-4">
                <Avatar>
                  <AvatarImage src="https://picsum.photos/seed/coral/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
+                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Title uses foreground */}
              </div>
 
-            <CardDescription className="text-muted-foreground text-sm">
-              <p className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</p>
-              <p className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></p>
+            <CardDescription className="text-muted-foreground text-sm"> {/* Description uses muted foreground */}
+              <p className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</p> {/* Explicitly set to foreground */}
+              <p className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></p> {/* Explicitly set to foreground */}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -642,7 +642,7 @@ export default function Home() {
                 console.log("Sensor data changed:", e.target.value);
                 setSensorData(e.target.value);
               }}
-              className="min-h-[150px] text-sm p-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className="min-h-[150px] text-sm p-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" // Ensure textarea text is visible
             />
             <Button
               onClick={analyzeData} // Correctly bind the function
@@ -665,7 +665,7 @@ export default function Home() {
       {analysisResults.length > 0 && (
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
+                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle> {/* Title uses foreground */}
                 <Button onClick={downloadReport} className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm" size="sm">
                     <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
                  </Button>
@@ -675,17 +675,17 @@ export default function Home() {
               <Table className="min-w-full">
                 <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                   <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead>
-                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead> {/* Header uses foreground */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -697,7 +697,7 @@ export default function Home() {
 
 
                       if (isPrediction) {
-                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'; // Prediction text color adapts
                           suitabilityText = 'Prediction';
                           suitabilityIndexText = ''; // No index for predictions
                       } else {
@@ -706,13 +706,13 @@ export default function Home() {
                            const isThreatening = result.isSuitable === false;
 
                            if (isIdeal) {
-                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
+                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200'; // Specific color for ideal
                                suitabilityText = 'Suitable';
                            } else if (isWarning) {
-                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
+                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200'; // Specific color for warning
                                suitabilityText = 'Warning';
                            } else { // Must be Threatening
-                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
+                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200'; // Specific color for threatening
                                suitabilityText = 'Threatening';
                            }
                        }
@@ -720,24 +720,24 @@ export default function Home() {
 
                     return (
                       <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell>
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell>
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell> {/* Cell uses foreground */}
                         <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
                                 {suitabilityText} {suitabilityIndexText}
                             </span>
                         </TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell> {/* Cell uses foreground */}
                         <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger>
-                                <AccordionContent className="text-xs pt-1 pb-2 text-muted-foreground">
+                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionContent className="text-xs pt-1 pb-2 text-muted-foreground"> {/* Content uses muted foreground */}
                                   {result.summary || 'N/A'}
                                 </AccordionContent>
                               </AccordionItem>
@@ -746,9 +746,9 @@ export default function Home() {
                          <TableCell className="py-2 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger>
+                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger> {/* Trigger uses foreground */}
                                 <AccordionContent>
-                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
+                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground"> {/* Content uses muted foreground */}
                                        {result.improvements && result.improvements.length > 0 ? (
                                            result.improvements.map((improvement, i) => (
                                                <li key={i}>{improvement}</li>
@@ -776,8 +776,8 @@ export default function Home() {
             <Accordion type="multiple" className="w-full space-y-4">
                 {parameters.map((parameter) => (
                      <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
-                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
+                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground"> {/* Trigger uses foreground */}
                                 <div className="flex items-center">
                                     <parameter.icon className="w-5 h-5 mr-2 text-cyan-500"/>
                                     {parameter.name} Trends
@@ -795,8 +795,8 @@ export default function Home() {
                                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                                         >
                                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/>
-                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/> {/* Axis/Tick uses foreground */}
+                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} /> {/* Axis/Tick uses foreground */}
                                            <RechartsTooltip
                                                 content={
                                                     <ChartTooltipContent
@@ -833,7 +833,9 @@ export default function Home() {
                                                     if (parameter.key === 'nitrate') {
                                                         color = 'hsl(var(--accent))';
                                                     }
-                                                    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={'hsl(var(--background))'} strokeWidth={1.5} />;
+                                                    // Use a contrasting stroke color for dots
+                                                    const strokeColor = 'hsl(var(--card))'; // Background color for stroke
+                                                    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={strokeColor} strokeWidth={1.5} />;
                                                 }
                                                 return null;
                                             }}
@@ -857,7 +859,9 @@ export default function Home() {
                                                           if (parameter.key === 'nitrate') {
                                                             color = 'hsl(var(--accent))'; // Use accent color for nitrate predictions
                                                           }
-                                                         return <circle cx={cx} cy={cy} r={4} fill={color} stroke={'hsl(var(--background))'} strokeWidth={1.5} />;
+                                                          // Use a contrasting stroke color for prediction dots
+                                                          const strokeColor = 'hsl(var(--card))'; // Background color for stroke
+                                                         return <circle cx={cx} cy={cy} r={4} fill={color} stroke={strokeColor} strokeWidth={1.5} />;
                                                     }
                                                     return null;
                                                 }}
@@ -879,17 +883,17 @@ export default function Home() {
 
       {/* Parameter Ranges Table */}
       {analysisResults.length > 0 && (
-          <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+          <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
             <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
+                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle> {/* Title uses foreground */}
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription> {/* Description uses foreground */}
             </CardHeader>
             <CardContent className="p-0">
                <div className="overflow-x-auto">
                <Table className="min-w-full">
                     <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead>
+                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead> {/* Header uses foreground */}
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
@@ -897,40 +901,40 @@ export default function Home() {
                     </TableHeader>
                      <TableBody>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                         <TableRow className="border-b-0"> {/* Last row no bottom border */}
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell>
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell> {/* Cell uses foreground */}
                         </TableRow>
                     </TableBody>
                 </Table>
@@ -942,7 +946,7 @@ export default function Home() {
       </div>
 
        {/* Footer Section */}
-      <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4">
+      <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4"> {/* Footer text remains white/muted */}
         <p>&copy; {new Date().getFullYear()} CoralGuard by Senath Sethmika. All rights reserved.</p>
         <p>Data analysis for educational and informational purposes only.</p>
         <div className="flex justify-center space-x-4 mt-2">
@@ -961,3 +965,4 @@ export default function Home() {
     </div>
   );
 }
+
