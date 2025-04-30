@@ -3,91 +3,89 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', Arial, Helvetica, sans-serif; /* Use a modern font */
 }
 
 @layer base {
   :root {
-    --background: 210 29% 96%;
-    --foreground: 150 36% 14%;
-    --card: 210 29% 96%;
-    --card-foreground: 150 36% 14%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 150 36% 14%;
-    --primary: 160 48% 32%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 16 80% 50%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Updated Theme Colors (Sea Blue, Light Beige, Coral) */
+    --background-raw: 60 33% 96%; /* Raw HSL for jsPDF background */
+    --background: hsl(var(--background-raw)); /* Light beige */
+    --foreground: hsl(160, 42%, 26%); /* Sea blue */
+
+    --card: hsl(var(--background));
+    --card-foreground: hsl(var(--foreground));
+
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(var(--foreground));
+
+    --primary: hsl(160, 48%, 32%); /* Sea blue - slightly adjusted for primary */
+    --primary-foreground: hsl(0, 0%, 100%); /* White text on primary */
+
+    --secondary: hsl(60, 20%, 90%); /* Lighter beige for secondary elements */
+    --secondary-foreground: hsl(var(--foreground));
+
+    --muted: hsl(60, 20%, 90%); /* Use secondary for muted */
+    --muted-foreground: hsl(160, 15%, 45%); /* Muted sea blue */
+
+    --accent: hsl(16, 80%, 60%); /* Coral - slightly adjusted */
+    --accent-foreground: hsl(0, 0%, 100%); /* White text on accent */
+
+    --destructive: 0 70% 50%; /* Red */
+    --destructive-foreground: hsl(0 0% 100%);
+
+    --border: hsl(160, 20%, 80%); /* Lighter sea blue border */
+    --input: hsl(160, 20%, 85%); /* Slightly darker input background */
+    --ring: hsl(16, 80%, 60%); /* Coral for focus rings */
+
+    --chart-1: hsl(205, 70%, 55%); /* Bright Blue */
+    --chart-2: hsl(173, 58%, 45%); /* Teal */
+    --chart-3: hsl(45, 80%, 60%);  /* Yellow/Orange */
+    --chart-4: hsl(280, 60%, 65%); /* Purple */
+    --chart-5: hsl(340, 70%, 60%); /* Pink */
+
+    --radius: 0.75rem; /* Slightly larger radius */
   }
+
   .dark {
-    --background: 240 10% 14%;
-    --foreground: 240 80% 98%;
-    --card: 240 10% 14%;
-    --card-foreground: 240 80% 98%;
-    --popover: 240 10% 14%;
-    --popover-foreground: 240 80% 98%;
-    --primary: 160 48% 32%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Define dark mode colors if needed */
+    --background-raw: 220 15% 15%;
+    --background: hsl(var(--background-raw));
+    --foreground: hsl(60, 30%, 95%); /* Off-white */
 
-    --sea-blue: 160 42% 26%;
-    --light-beige: 45 17% 96%;
-    --coral: 16 80% 50%;
-  }
+    --card: hsl(220, 15%, 20%);
+    --card-foreground: hsl(var(--foreground));
 
-    body {
-    --background: hsl(var(--light-beige)); /* Light beige */
-    --foreground: hsl(var(--sea-blue)); /* Sea blue */
-    --primary: hsl(var(--sea-blue)); /* Sea blue */
-    --accent: hsl(var(--coral)); /* Coral */
+    --popover: hsl(220, 15%, 10%);
+    --popover-foreground: hsl(var(--foreground));
+
+    --primary: hsl(160, 50%, 50%); /* Brighter Sea Blue */
+    --primary-foreground: hsl(220, 20%, 10%); /* Dark text on primary */
+
+    --secondary: hsl(220, 15%, 25%);
+    --secondary-foreground: hsl(var(--foreground));
+
+    --muted: hsl(220, 15%, 25%);
+    --muted-foreground: hsl(60, 15%, 65%);
+
+    --accent: hsl(16, 85%, 65%); /* Brighter Coral */
+    --accent-foreground: hsl(0, 0%, 10%);
+
+    --destructive: 0 60% 55%;
+    --destructive-foreground: hsl(0 0% 100%);
+
+    --border: hsl(220, 15%, 30%);
+    --input: hsl(220, 15%, 28%);
+    --ring: hsl(16, 85%, 65%);
+
+    --chart-1: hsl(205, 75%, 65%);
+    --chart-2: hsl(173, 65%, 55%);
+    --chart-3: hsl(45, 85%, 65%);
+    --chart-4: hsl(280, 65%, 70%);
+    --chart-5: hsl(340, 75%, 70%);
   }
 }
+
 
 @layer base {
   * {
@@ -95,72 +93,41 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+     /* Add smooth scrolling */
+    scroll-behavior: smooth;
+     /* Improve text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Add a subtle gradient background - remove if using the full underwater effect */
+   body {
+     background: linear-gradient(180deg, hsl(180, 50%, 85%), hsl(200, 60%, 95%));
+   }
+
+   .dark body {
+     background: linear-gradient(180deg, hsl(220, 20%, 10%), hsl(220, 15%, 25%));
+   }
+
+
 }
 
-/* Underwater background styles */
-/*.underwater-bg {*/
-/*  background: linear-gradient(to bottom, #7bc8f9, #29abe2);*/
-/*  overflow: hidden;*/
-/*  position: relative;*/
-/*}*/
+/* Custom scrollbar for a more modern look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-/*.bubbles {*/
-/*  position: absolute;*/
-/*  top: 0;*/
-/*  left: 0;*/
-/*  width: 100%;*/
-/*  height: 100%;*/
-/*  z-index: 0;*/
-/*  pointer-events: none;*/
-/*}*/
+::-webkit-scrollbar-track {
+  background: hsl(var(--background) / 0.1);
+  border-radius: 10px;
+}
 
-/*.bubble {*/
-/*  position: absolute;*/
-/*  background: rgba(255, 255, 255, 0.2);*/
-/*  border-radius: 50%;*/
-/*  animation: float 8s infinite linear;*/
-/*  bottom: 0;*/
-/*}*/
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.5);
+  border-radius: 10px;
+}
 
-/*@keyframes float {*/
-/*  0% {*/
-/*    opacity: 0;*/
-/*    transform: translateY(0);*/
-/*  }*/
-/*  10% {*/
-/*    opacity: 1;*/
-/*  }*/
-/*  90% {*/
-/*    opacity: 1;*/
-/*  }*/
-/*  100% {*/
-/*    opacity: 0;*/
-/*    transform: translateY(-100vh);*/
-/*  }*/
-/*}*/
-
-/*.fish-container {*/
-/*  position: absolute;*/
-/*  top: 0;*/
-/*  left: 0;*/
-/*  width: 100%;*/
-/*  height: 100%;*/
-/*  z-index: 1;*/
-/*  pointer-events: none;*/
-/*}*/
-
-/*.fish {*/
-/*  position: absolute;*/
-/*  object-fit: contain;*/
-/*  animation: swim 10s infinite linear;*/
-/*}*/
-
-/*@keyframes swim {*/
-/*  0% {*/
-/*    transform: translateX(-100%) scaleX(-1);*/
-/*  }*/
-/*  100% {*/
-/*    transform: translateX(100%) scaleX(-1);*/
-/*  }*/
-/*}*/
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.8);
+}
