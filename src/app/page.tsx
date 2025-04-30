@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table"; // Ensure Table components are imported
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
+import Link from 'next/link'; // Import Link for social media icons
 
 interface AnalysisResult {
   time: string;
@@ -475,6 +476,27 @@ export default function Home() {
 
   return (
     <div id="report" className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
+
+      {/* Header Section */}
+      <header className="w-full max-w-5xl mb-8 text-center text-foreground">
+        <h1 className="text-4xl font-bold">CoralGuard</h1>
+        <p className="text-lg text-muted-foreground">V2.0 - Mariana</p>
+        <p className="mt-4 text-sm">
+          Made with love by Senath Sethmika
+        </p>
+        <div className="flex justify-center space-x-4 mt-2">
+          <Link href="https://www.linkedin.com/in/senath-sethmika/" target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent/80">
+            LinkedIn
+          </Link>
+          <Link href="https://web.facebook.com/senath.sethmika/" target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent/80">
+            Facebook
+          </Link>
+          <Link href="https://github.com/senath112" target="_blank" rel="noopener noreferrer" className="text-accent hover:text-accent/80">
+            Github
+          </Link>
+        </div>
+      </header>
+
       <div className="max-w-5xl w-full space-y-8">
         <Card className="bg-card shadow-md rounded-md">
            <CardHeader>
@@ -663,7 +685,10 @@ export default function Home() {
                                             const { cx, cy, payload } = props;
                                              // Don't render dots for prediction points on the actual data line
                                             if (!payload.isPrediction) {
-                                                 const color = chartConfig[parameter.key]?.color || '#8884d8';
+                                                 let color = chartConfig[parameter.key]?.color || '#8884d8';
+                                                  if (parameter.key === 'nitrate') {
+                                                    color = 'hsl(var(--accent))'; // Ensure nitrate points use accent color
+                                                }
                                                 return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
                                             }
                                             return null;
@@ -683,7 +708,10 @@ export default function Home() {
                                                 const { cx, cy, payload } = props;
                                                 // Only render dots for prediction points
                                                 if (payload.isPrediction) {
-                                                    const color = chartConfig[parameter.key]?.color || '#8884d8';
+                                                     let color = chartConfig[parameter.key]?.color || '#8884d8';
+                                                      if (parameter.key === 'nitrate') {
+                                                        color = 'hsl(var(--accent))'; // Ensure nitrate points use accent color for predictions too
+                                                    }
                                                     return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} strokeWidth={1} />;
                                                 }
                                                 return null;
