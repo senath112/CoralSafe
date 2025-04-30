@@ -112,15 +112,15 @@ export default function Home() {
 
     // Temporarily set text to black for PDF generation
     const originalColors = new Map<HTMLElement | SVGTextElement, string>();
-    // Query for common text elements and SVG text elements
+    // Query for common text elements and SVG text elements, prioritize theme classes
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement>(
-        '.text-foreground, .text-muted-foreground, text, .text-green-800, .dark\\:text-green-200, .text-yellow-800, .dark\\:text-yellow-200, .text-red-800, .dark\\:text-red-200, .text-gray-800, .dark\\:text-gray-300' // Include specific color classes used in tables/badges and SVG text
+        '.text-foreground, .text-muted-foreground, text, tspan' // Select theme classes and SVG text elements
     );
 
     elementsToColor.forEach(el => {
        originalColors.set(el, el.style.fill || el.style.color); // Store fill for SVG, color for HTML
        // Force black color for PDF rendering
-       if (el instanceof SVGTextElement) {
+       if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
          el.style.fill = 'black';
          el.style.color = ''; // Clear color style if any
        } else {
@@ -174,14 +174,14 @@ export default function Home() {
          elementsToColor.forEach(el => {
              const originalColor = originalColors.get(el);
              if (originalColor !== undefined) {
-                 if (el instanceof SVGTextElement) {
+                 if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                     el.style.fill = originalColor;
                  } else {
                     el.style.color = originalColor;
                  }
              } else {
                  // Remove inline style if none existed originally
-                 if (el instanceof SVGTextElement) {
+                 if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                     el.style.fill = '';
                  } else {
                     el.style.color = '';
@@ -785,7 +785,7 @@ export default function Home() {
                                 {/* Chevron is automatically added by AccordionTrigger */}
                             </AccordionTrigger>
                              <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
-                                <p className="text-sm text-muted-foreground mb-4 text-foreground"> {/* Changed text color */}
+                                <p className="text-sm text-muted-foreground mb-4 text-foreground"> {/* Ensure description text uses foreground */}
                                     Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
                                 </p>
                                 <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
@@ -801,8 +801,8 @@ export default function Home() {
                                                 content={
                                                     <ChartTooltipContent
                                                         indicator="dot"
-                                                        labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label is also foreground
-                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground" // Set tooltip text to foreground
+                                                        labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label uses foreground
+                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground" // Ensure tooltip content uses foreground
                                                     />
                                                 }
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
@@ -817,7 +817,7 @@ export default function Home() {
                                                   color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
                                                   icon: config.icon // Pass icon
                                                 }))
-                                            } className="text-foreground" />} // Set legend text to foreground
+                                            } className="text-foreground" />} // Ensure legend text uses foreground
                                           />
                                           {/* Line for actual data */}
                                           <Line

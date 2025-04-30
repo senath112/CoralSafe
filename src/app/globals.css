@@ -11,19 +11,19 @@ body {
     /* Updated Theme Colors (Sea Blue, Light Beige, Coral) */
     --background-raw: 60 33% 96%; /* Raw HSL for jsPDF background */
     --background: hsl(var(--background-raw)); /* Light beige */
-    --foreground: hsl(160, 42%, 10%); /* Darker Sea blue for better text contrast */
+    --foreground: hsl(160, 42%, 10%); /* Darker Sea blue (almost black) for better text contrast */
 
     --card: hsl(var(--background));
-    --card-foreground: hsl(var(--foreground));
+    --card-foreground: hsl(var(--foreground)); /* Card text uses foreground */
 
     --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(var(--foreground));
+    --popover-foreground: hsl(var(--foreground)); /* Popover text uses foreground */
 
     --primary: hsl(160, 48%, 32%); /* Sea blue - slightly adjusted for primary */
     --primary-foreground: hsl(0, 0%, 100%); /* White text on primary */
 
     --secondary: hsl(60, 20%, 90%); /* Lighter beige for secondary elements */
-    --secondary-foreground: hsl(var(--foreground));
+    --secondary-foreground: hsl(var(--foreground)); /* Secondary text uses foreground */
 
     --muted: hsl(60, 20%, 90%); /* Use secondary for muted */
     --muted-foreground: hsl(160, 15%, 45%); /* Muted sea blue */
@@ -92,7 +92,7 @@ body {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground; /* Ensure base text color uses foreground */
+    @apply bg-background text-foreground; /* Explicitly set base text color to use foreground */
      /* Add smooth scrolling */
     scroll-behavior: smooth;
      /* Improve text rendering */
