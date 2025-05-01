@@ -923,13 +923,14 @@ export default function Home() {
                                           <Line
                                             key={`${parameter.key}-actual`} // Add unique key
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Use null for prediction points in actual data line
-                                            type="linear" // Changed from monotone to linear
-                                            stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
-                                            strokeWidth={0} // Make line invisible
+                                            type="linear"
+                                            stroke="#000000" // Black line
+                                            strokeWidth={2} // Medium width
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
                                             isAnimationActive={false}
+                                            connectNulls={false} // Don't connect across nulls
                                           />
                                            {/* Line segment specifically for predictions, starting from the last actual point */}
                                            <Line
@@ -943,14 +944,15 @@ export default function Home() {
                                                     }
                                                     return null; // Return null for actual data points before the last one
                                                 }}
-                                                stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
-                                                type="linear" // Changed from monotone to linear
-                                                strokeWidth={0} // Make line invisible
+                                                stroke="#000000" // Black line for predictions too
+                                                type="linear"
+                                                strokeWidth={2} // Medium width
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
+                                                connectNulls={true} // Connect prediction points even if separated by nulls
                                              />
 
                                         </LineChart>
@@ -1047,4 +1049,3 @@ export default function Home() {
     </div>
   );
 }
-
