@@ -6,6 +6,19 @@ import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+  } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
 import {
   ChartContainer,
@@ -98,9 +111,21 @@ export default function Home() {
   const {toast} = useToast();
 
   const csvDataRef = useRef<string>('');
+  const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
 
-  const downloadReport = () => {
-    const input = document.getElementById('report');
+  // State for PDF options dialog
+  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
+  const [expandSummaryPdf, setExpandSummaryPdf] = useState(false);
+  const [expandActionsPdf, setExpandActionsPdf] = useState(false);
+
+  // Modified function to handle PDF generation based on options
+  const generatePdfWithOptions = () => {
+    downloadReport(expandSummaryPdf, expandActionsPdf);
+    setIsPdfDialogOpen(false); // Close dialog after confirming
+  };
+
+  const downloadReport = (expandSummary: boolean, expandActions: boolean) => {
+    const input = reportRef.current; // Use the ref
     if (!input) {
       toast({
         title: 'Error',
@@ -112,84 +137,127 @@ export default function Home() {
 
     // Temporarily set text to black for PDF generation
     const originalColors = new Map<HTMLElement | SVGTextElement, string>();
-    // Query for common text elements and SVG text elements, prioritize theme classes
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement>(
-        '.text-foreground, .text-muted-foreground, text, tspan' // Select theme classes and SVG text elements
+      '.text-foreground, .text-muted-foreground, text, tspan'
     );
 
     elementsToColor.forEach(el => {
-       originalColors.set(el, el.style.fill || el.style.color); // Store fill for SVG, color for HTML
-       // Force black color for PDF rendering
-       if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-         el.style.fill = 'black';
-         el.style.color = ''; // Clear color style if any
-       } else {
-         el.style.color = 'black';
-         el.style.fill = ''; // Clear fill style if any
-       }
+      originalColors.set(el, el.style.fill || el.style.color);
+      if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+        el.style.fill = 'black';
+        el.style.color = '';
+      } else {
+        el.style.color = 'black';
+        el.style.fill = '';
+      }
     });
 
+    // Temporarily expand accordions if requested
+    const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
+    const summaryContents = Array.from(input.querySelectorAll<HTMLElement>('[data-summary-content]'));
+    const actionsTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-actions-trigger]'));
+    const actionsContents = Array.from(input.querySelectorAll<HTMLElement>('[data-actions-content]'));
 
-    html2canvas(input, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff' // Force white background for PDF clarity
-      })
-      .then((canvas) => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        let heightLeft = pdfHeight;
-        let position = 0;
+    const originalStates = new Map<Element, string | null>();
 
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
-
-        while (heightLeft > 0) {
-          position = heightLeft - pdfHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-          heightLeft -= pageHeight;
-        }
-
-        pdf.save('coral_safe_report.pdf');
-        toast({
-          title: 'Success',
-          description: 'Report downloaded successfully!',
+    const setState = (elements: Element[], state: 'open' | 'closed') => {
+        elements.forEach(el => {
+            // Only store original state if it hasn't been stored already for this element
+            if (!originalStates.has(el)) {
+                originalStates.set(el, el.getAttribute('data-state'));
+            }
+            el.setAttribute('data-state', state);
         });
-      })
-      .catch((error) => {
-        console.error('Error generating PDF:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to generate PDF. Please try again.',
-          variant: 'destructive',
+    };
+
+    if (expandSummary) {
+      setState(summaryTriggers, 'open');
+      setState(summaryContents, 'open');
+    } else {
+      setState(summaryTriggers, 'closed'); // Ensure closed if not expanding
+      setState(summaryContents, 'closed');
+    }
+
+    if (expandActions) {
+      setState(actionsTriggers, 'open');
+      setState(actionsContents, 'open');
+    } else {
+       setState(actionsTriggers, 'closed'); // Ensure closed if not expanding
+       setState(actionsContents, 'closed');
+    }
+
+    // Force redraw/reflow before html2canvas - small timeout
+    setTimeout(() => {
+        html2canvas(input, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        })
+        .then((canvas) => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            let heightLeft = pdfHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+            }
+
+            pdf.save('coral_safe_report.pdf');
+            toast({
+            title: 'Success',
+            description: 'Report downloaded successfully!',
+            });
+        })
+        .catch((error) => {
+            console.error('Error generating PDF:', error);
+            toast({
+            title: 'Error',
+            description: 'Failed to generate PDF. Please try again.',
+            variant: 'destructive',
+            });
+        })
+        .finally(() => {
+            // Restore original colors
+            elementsToColor.forEach(el => {
+            const originalColor = originalColors.get(el);
+            if (originalColor !== undefined) {
+                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                el.style.fill = originalColor;
+                } else {
+                el.style.color = originalColor;
+                }
+            } else {
+                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                el.style.fill = '';
+                } else {
+                el.style.color = '';
+                }
+            }
+            });
+
+            // Restore original accordion states
+            originalStates.forEach((state, el) => {
+                if (state) {
+                    el.setAttribute('data-state', state);
+                } else {
+                    el.removeAttribute('data-state');
+                }
+            });
         });
-      })
-      .finally(() => {
-         // Restore original colors
-         elementsToColor.forEach(el => {
-             const originalColor = originalColors.get(el);
-             if (originalColor !== undefined) {
-                 if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                    el.style.fill = originalColor;
-                 } else {
-                    el.style.color = originalColor;
-                 }
-             } else {
-                 // Remove inline style if none existed originally
-                 if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                    el.style.fill = '';
-                 } else {
-                    el.style.color = '';
-                 }
-             }
-         });
-      });
+    }, 100); // Small delay for rendering changes
   };
+
 
   const parseData = (data: string): SensorData[] => {
     console.log("Parsing data...");
@@ -593,7 +661,7 @@ export default function Home() {
 
 
   return (
-    <div id="report" className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground"> {/* Added text-foreground */}
+    <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground"> {/* Added text-foreground */}
 
       {/* Header Section */}
       <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm"> {/* Header text remains white */}
@@ -656,9 +724,44 @@ export default function Home() {
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle> {/* Title uses foreground */}
-                <Button onClick={downloadReport} className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm" size="sm">
-                    <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
-                 </Button>
+                 {/* AlertDialog Trigger for PDF Options */}
+                 <AlertDialog open={isPdfDialogOpen} onOpenChange={setIsPdfDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                        <Button className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm" size="sm">
+                             <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
+                         </Button>
+                     </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>PDF Download Options</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Choose whether to expand the Summary and Suggested Actions sections in the generated PDF report.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="grid gap-4 py-4">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                            id="expand-summary"
+                            checked={expandSummaryPdf}
+                            onCheckedChange={(checked) => setExpandSummaryPdf(Boolean(checked))}
+                            />
+                            <Label htmlFor="expand-summary" className="text-foreground">Expand Summary</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                            id="expand-actions"
+                            checked={expandActionsPdf}
+                            onCheckedChange={(checked) => setExpandActionsPdf(Boolean(checked))}
+                            />
+                            <Label htmlFor="expand-actions" className="text-foreground">Expand Suggested Actions</Label>
+                        </div>
+                        </div>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={generatePdfWithOptions}>Download PDF</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                 </AlertDialog>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -723,11 +826,11 @@ export default function Home() {
                         <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell> {/* Cell uses foreground */}
                         <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
                         <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
+                         <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
                             <Accordion type="single" collapsible className="w-full">
-                              <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger> {/* Trigger uses foreground */}
-                                <AccordionContent className="text-xs pt-1 pb-2 text-muted-foreground"> {/* Content uses muted foreground */}
+                              <AccordionItem value={`summary-${index}`} className="border-b-0">
+                                <AccordionTrigger data-summary-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionContent data-summary-content className="text-xs pt-1 pb-2 text-muted-foreground"> {/* Content uses muted foreground */}
                                   {result.summary || 'N/A'}
                                 </AccordionContent>
                               </AccordionItem>
@@ -735,9 +838,9 @@ export default function Home() {
                         </TableCell>
                          <TableCell className="py-2 px-4">
                             <Accordion type="single" collapsible className="w-full">
-                              <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger> {/* Trigger uses foreground */}
-                                <AccordionContent>
+                              <AccordionItem value={`actions-${index}`} className="border-b-0">
+                                <AccordionTrigger data-actions-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionContent data-actions-content>
                                    <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground"> {/* Content uses muted foreground */}
                                        {result.improvements && result.improvements.length > 0 ? (
                                            result.improvements.map((improvement, i) => (
@@ -955,4 +1058,3 @@ export default function Home() {
     </div>
   );
 }
-
