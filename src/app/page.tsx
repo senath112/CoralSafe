@@ -1,3 +1,4 @@
+
 'use client';
 
 import {useState, useCallback, useRef, useEffect} from 'react';
@@ -6,8 +7,6 @@ import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-// Removed AlertDialog imports as they are no longer needed
-// Removed Checkbox and Label imports as they are no longer needed
 import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
 import {
   ChartContainer,
@@ -102,16 +101,6 @@ export default function Home() {
   const csvDataRef = useRef<string>('');
   const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
 
-  // State for PDF options dialog - REMOVED
-  // const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
-  // const [expandSummaryPdf, setExpandSummaryPdf] = useState(false);
-  // const [expandActionsPdf, setExpandActionsPdf] = useState(false);
-
-  // Modified function to handle PDF generation based on options - REMOVED
-  // const generatePdfWithOptions = () => {
-  //   downloadReport(expandSummaryPdf, expandActionsPdf);
-  //   setIsPdfDialogOpen(false); // Close dialog after confirming
-  // };
 
   // Updated downloadReport to accept expansion options, defaulting to false if not provided
   const downloadReport = (expandSummary = false, expandActions = false) => {
@@ -868,20 +857,7 @@ export default function Home() {
                                             type="monotone"
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2.5}
-                                            dot={(props) => {
-                                                const { cx, cy, payload } = props;
-                                                if (!payload.isPrediction) {
-                                                    let color = chartConfig[parameter.key]?.color || '#8884d8';
-                                                    // Override for nitrate to use accent
-                                                    if (parameter.key === 'nitrate') {
-                                                        color = 'hsl(var(--accent))';
-                                                    }
-                                                    // Use a contrasting stroke color for dots
-                                                    const strokeColor = 'hsl(var(--card))'; // Background color for stroke
-                                                    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={strokeColor} strokeWidth={1.5} />;
-                                                }
-                                                return null;
-                                            }}
+                                            dot={true} // Use default dots to connect points
                                              activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--background))', fill: chartConfig[parameter.key]?.color || '#8884d8' }}
                                             name={parameter.name}
                                             connectNulls={true} // Connect nulls for the main line
@@ -893,21 +869,7 @@ export default function Home() {
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 strokeWidth={2.5}
                                                 strokeDasharray="5 5" // Dashed line for predictions
-                                                dot={(props) => {
-                                                    const { cx, cy, payload } = props;
-                                                    // Only render dots for prediction points
-                                                    if (payload.isPrediction) {
-                                                         let color = chartConfig[parameter.key]?.color || '#8884d8';
-                                                          // Ensure nitrate points use accent color for predictions too
-                                                          if (parameter.key === 'nitrate') {
-                                                            color = 'hsl(var(--accent))'; // Use accent color for nitrate predictions
-                                                          }
-                                                          // Use a contrasting stroke color for prediction dots
-                                                          const strokeColor = 'hsl(var(--card))'; // Background color for stroke
-                                                         return <circle cx={cx} cy={cy} r={4} fill={color} stroke={strokeColor} strokeWidth={1.5} />;
-                                                    }
-                                                    return null;
-                                                }}
+                                                dot={true} // Use default dots for predictions as well
                                                 activeDot={false} // No active dot effect for prediction line segment
                                                 connectNulls={true} // Connect nulls for the prediction line start
                                                 name={`${parameter.name} (Pred.)`}
@@ -1008,3 +970,4 @@ export default function Home() {
     </div>
   );
 }
+
