@@ -863,6 +863,7 @@ export default function Home() {
                                           />
                                           {/* Line for actual data */}
                                           <Line
+                                            key={`${parameter.key}-actual`} // Add unique key
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? undefined : payload[parameter.key as keyof AnalysisResult]} // Use undefined instead of null
                                             type="monotone" // Smooth line
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
@@ -871,10 +872,11 @@ export default function Home() {
                                              activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
                                             connectNulls={false} // Set to false to prevent connecting across gaps where prediction starts
-                                            isAnimationActive={false}
+                                            isAnimationActive={false} // Disable animation
                                           />
                                            {/* Line segment specifically for predictions */}
                                            <Line
+                                                key={`${parameter.key}-prediction`} // Add unique key
                                                 dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined} // Use undefined instead of null
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 type="monotone" // Smooth line for predictions too
@@ -884,7 +886,7 @@ export default function Home() {
                                                 activeDot={false} // No active dot effect for prediction line segment
                                                 connectNulls={false} // Set to false to prevent connecting gap between actual and prediction
                                                 name={`${parameter.name} (Pred.)`}
-                                                isAnimationActive={false}
+                                                isAnimationActive={false} // Disable animation
                                              />
 
                                         </LineChart>
@@ -982,3 +984,4 @@ export default function Home() {
   );
 }
 
+    
