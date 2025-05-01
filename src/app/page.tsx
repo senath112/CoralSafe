@@ -100,6 +100,55 @@ export default function Home() {
   const csvDataRef = useRef<string>('');
   const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
 
+  // State for time tracking
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [remainingTimeText, setRemainingTimeText] = useState<string>('');
+
+   // Effect for updating time remaining
+   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (isLoading && startTime !== null) {
+      intervalId = setInterval(() => {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        setElapsedTime(elapsed);
+
+        if (analysisProgress > 0 && analysisProgress < 100) {
+          const totalEstimatedTime = elapsed / (analysisProgress / 100);
+          const remainingTimeMs = totalEstimatedTime - elapsed;
+          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+          const minutes = Math.floor(remainingSeconds / 60);
+          const seconds = remainingSeconds % 60;
+          if (minutes > 0) {
+            setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+          } else {
+            setRemainingTimeText(`~${seconds}s left`);
+          }
+        } else if (analysisProgress === 0) {
+          setRemainingTimeText('Estimating time...');
+        } else { // Progress is 100 or analysis finished
+          setRemainingTimeText('Finishing up...');
+        }
+      }, 1000); // Update every second
+    } else {
+      setElapsedTime(0); // Reset elapsed time when not loading
+       if (analysisProgress === 100) {
+          setRemainingTimeText('Analysis complete!');
+       } else {
+           setRemainingTimeText(''); // Clear remaining time text
+       }
+    }
+
+    // Cleanup function to clear the interval
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isLoading, startTime, analysisProgress]); // Dependencies
+
 
   // Updated downloadReport to accept expansion options, defaulting to false if not provided
   const downloadReport = (expandSummary = false, expandActions = false) => {
@@ -420,7 +469,8 @@ export default function Home() {
     setIsLoading(true);
     setAnalysisProgress(0);
     setAnalysisResults([]); // Clear previous results
-    console.log("Set loading state to true and cleared previous results.");
+    setStartTime(Date.now()); // Record start time
+    console.log("Set loading state to true, cleared previous results, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data if needed
 
     try {
@@ -436,6 +486,7 @@ export default function Home() {
                 variant: 'destructive',
             });
             setIsLoading(false);
+            setStartTime(null); // Reset start time on error
             return;
         }
 
@@ -631,6 +682,7 @@ export default function Home() {
     } finally {
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
+        setStartTime(null); // Reset start time when done or on error
         // Ensure progress completes if successful or if it stopped partway
         if (analysisProgress < 100) { // Check if progress needs setting to 100
              setAnalysisProgress(100);
@@ -691,7 +743,9 @@ export default function Home() {
              {isLoading && (
                  <div className="w-full px-4 mt-4">
                      <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-white/80 mt-2">Analysis Progress: {analysisProgress.toFixed(0)}%</p> {/* Added percentage display */}
+                     <p className="text-center text-sm text-white/80 mt-2">
+                        Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
+                     </p> {/* Added percentage and time remaining */}
                  </div>
              )}
           </CardContent>
