@@ -743,7 +743,7 @@ export default function Home() {
              {isLoading && (
                  <div className="w-full px-4 mt-4">
                      <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-white/80 mt-2">
+                     <p className="text-center text-sm text-foreground mt-2"> {/* Changed text color to text-foreground */}
                         Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
                      </p> {/* Added percentage and time remaining */}
                  </div>
@@ -925,20 +925,27 @@ export default function Home() {
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
-                                            connectNulls={true} // Connect dots over null/undefined values
+                                            connectNulls={false} // Do not connect over nulls for the main line
                                             isAnimationActive={false}
                                           />
                                            {/* Line segment specifically for predictions */}
                                            <Line
                                                 key={`${parameter.key}-prediction`} // Add unique key
-                                                dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined} // Use undefined instead of null
+                                                dataKey={(payload: AnalysisResult, index: number) => {
+                                                    // Include the last actual point to connect the lines
+                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction) - 1;
+                                                    if (index === lastActualIndex && lastActualIndex >= 0) {
+                                                        return analysisResults[lastActualIndex][parameter.key as keyof AnalysisResult];
+                                                    }
+                                                    return payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined;
+                                                }}
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 type="monotone" // Smooth curve
                                                 strokeWidth={2}
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
-                                                connectNulls={true} // Connect prediction dots
+                                                connectNulls={true} // Connect prediction dots, including the bridge point
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
                                              />
@@ -1037,5 +1044,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
