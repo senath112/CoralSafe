@@ -663,7 +663,7 @@ export default function Home() {
                  <AvatarImage data-ai-hint="coral" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Title uses foreground */}
+               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Use CardTitle instead of p */}
              </div>
 
             <CardDescription className="text-muted-foreground text-sm"> {/* Description uses muted foreground */}
@@ -865,7 +865,7 @@ export default function Home() {
                                           <Line
                                             key={`${parameter.key}-actual`} // Add unique key
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? undefined : payload[parameter.key as keyof AnalysisResult]} // Use undefined instead of null
-                                            type="linear" // Change from 'monotone' to 'linear'
+                                            type="monotone" // Change back to "monotone" for smooth curve
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2} // Adjust stroke width if needed
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
@@ -879,7 +879,7 @@ export default function Home() {
                                                 key={`${parameter.key}-prediction`} // Add unique key
                                                 dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined} // Use undefined instead of null
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
-                                                type="linear" // Change from 'monotone' to 'linear'
+                                                type="monotone" // Change back to "monotone" for smooth curve
                                                 strokeWidth={2} // Adjust stroke width if needed
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
