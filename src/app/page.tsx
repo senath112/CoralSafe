@@ -605,17 +605,7 @@ export default function Home() {
         <p className="mt-4 text-sm text-blue-200">
           Made with love by Senath Sethmika
         </p>
-        <div className="flex justify-center space-x-4 mt-2">
-          <Link href="https://www.linkedin.com/in/senath-sethmika/" target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:text-white transition-colors duration-300">
-            LinkedIn
-          </Link>
-          <Link href="https://web.facebook.com/senath.sethmika/" target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:text-white transition-colors duration-300">
-            Facebook
-          </Link>
-          <Link href="https://github.com/senath112" target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:text-white transition-colors duration-300">
-            Github
-          </Link>
-        </div>
+        {/* Removed social media links */}
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
@@ -623,7 +613,7 @@ export default function Home() {
            <CardHeader>
              <div className="flex items-center mb-4">
                <Avatar>
-                 <AvatarImage src="https://picsum.photos/seed/coral/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
+                 <AvatarImage data-ai-hint="coral" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
                 <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Title uses foreground */}
