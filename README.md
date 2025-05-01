@@ -2,7 +2,16 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/dedd2488-a3eb-48da-8e29-a7e6eae5f947/deploy-status)](https://app.netlify.com/sites/statuesque-cassata-e55aad/deploys)
 <img width="1503" alt="Screenshot 2025-05-01 at 16 12 28" src="https://github.com/user-attachments/assets/b0678945-821f-4514-8a75-4847ac0db995" />
+# 🌊 Mariana V2.0 — Intelligent Coral Reef Monitoring System
 
+**Official Release Date:** May 1st, 2025  
+**Developer:** [Senath Sethmika](mailto:senathsethmika@gmail.com) | [LinkedIn](https://www.linkedin.com/in/senath-sethmika-b8584a268/) | [Facebook](https://www.facebook.com/senath.sethmika/)
+
+---
+
+Mariana V2.0 is a next-generation marine monitoring system designed to predict and protect coral reef health. Powered by environmental datasets and a Machine Learning model built using the **Gemini API**, it evaluates coral supportiveness using real-time marine parameters.
+
+> **“Protecting coral reefs through data, AI, and clean design.”**
 This dataset contains **simulated marine environmental data** collected from **Reef_A** during April 2025, recorded at 6-hour intervals.
 
 It is designed to work with a **Machine Learning model powered by the Gemini API** to predict whether marine environmental conditions are **supportive or threatening to coral health** based on multiple oceanographic parameters.
@@ -70,29 +79,6 @@ Each value includes units for realism.
 - [ ] Seasonal datasets (June, September, etc.)
 
 ---
-
-# 🌊 Mariana V2.0 Release Announcement 🚀
-
-**🎉 Official Release Date: May 1st, 2025 (01.05.2025)**
-
-We are thrilled to announce Mariana V2.0 — the next evolution of our intelligent coral reef monitoring and defense system!
-
-## 🧠 What’s New?
-
-### 🔍 Advanced Threat Detection
-Improved ML-based detection of acidification, hypoxia, and stress indicators.
-
-### 🧪 Actionable Suggestions
-Recommendations for buffering, oxygenation, turbidity reduction, and more.
-
-### 📈 Smarter Visualizations
-Real-time curves, dynamic color zones, and extreme event highlights.
-
-### 🧠 ReefGuard Ready
-Mariana V2.0 is fully integrated with **ReefGuard V1** — a full-stack ML-powered coral protection engine.
-
----
-
 ## 🌐 CoralSafe Deployment Guide
 
 ### Steps to Deploy on Netlify
