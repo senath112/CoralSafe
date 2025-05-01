@@ -1,4 +1,3 @@
-
 'use client';
 
 import {useState, useCallback, useRef, useEffect} from 'react';
@@ -857,8 +856,8 @@ export default function Home() {
                                             type="monotone"
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2.5}
-                                            dot={true} // Use default dots to connect points
-                                             activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--background))', fill: chartConfig[parameter.key]?.color || '#8884d8' }}
+                                            dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
+                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
                                             connectNulls={true} // Connect nulls for the main line
                                             isAnimationActive={false}
@@ -869,7 +868,7 @@ export default function Home() {
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 strokeWidth={2.5}
                                                 strokeDasharray="5 5" // Dashed line for predictions
-                                                dot={true} // Use default dots for predictions as well
+                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
                                                 connectNulls={true} // Connect nulls for the prediction line start
                                                 name={`${parameter.name} (Pred.)`}
@@ -970,4 +969,3 @@ export default function Home() {
     </div>
   );
 }
-
