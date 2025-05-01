@@ -49,7 +49,7 @@ const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p // Changed to paragraph element
+  <p // Changed back to paragraph element
     ref={ref}
     className={cn("text-sm text-muted-foreground", className)}
     {...props}

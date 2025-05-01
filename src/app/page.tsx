@@ -719,8 +719,8 @@ export default function Home() {
              </div>
 
             <CardDescription className="text-muted-foreground text-sm"> {/* Description uses muted foreground */}
-              <p className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</p> {/* Explicitly set to foreground */}
-              <p className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></p> {/* Explicitly set to foreground */}
+              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div> {/* Use div instead of p */}
+              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div> {/* Use div instead of p */}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1049,5 +1049,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
