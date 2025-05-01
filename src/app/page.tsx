@@ -6,19 +6,8 @@ import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-  } from "@/components/ui/alert-dialog"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+// Removed AlertDialog imports as they are no longer needed
+// Removed Checkbox and Label imports as they are no longer needed
 import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
 import {
   ChartContainer,
@@ -113,18 +102,19 @@ export default function Home() {
   const csvDataRef = useRef<string>('');
   const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
 
-  // State for PDF options dialog
-  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
-  const [expandSummaryPdf, setExpandSummaryPdf] = useState(false);
-  const [expandActionsPdf, setExpandActionsPdf] = useState(false);
+  // State for PDF options dialog - REMOVED
+  // const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
+  // const [expandSummaryPdf, setExpandSummaryPdf] = useState(false);
+  // const [expandActionsPdf, setExpandActionsPdf] = useState(false);
 
-  // Modified function to handle PDF generation based on options
-  const generatePdfWithOptions = () => {
-    downloadReport(expandSummaryPdf, expandActionsPdf);
-    setIsPdfDialogOpen(false); // Close dialog after confirming
-  };
+  // Modified function to handle PDF generation based on options - REMOVED
+  // const generatePdfWithOptions = () => {
+  //   downloadReport(expandSummaryPdf, expandActionsPdf);
+  //   setIsPdfDialogOpen(false); // Close dialog after confirming
+  // };
 
-  const downloadReport = (expandSummary: boolean, expandActions: boolean) => {
+  // Updated downloadReport to accept expansion options, defaulting to false if not provided
+  const downloadReport = (expandSummary = false, expandActions = false) => {
     const input = reportRef.current; // Use the ref
     if (!input) {
       toast({
@@ -170,21 +160,11 @@ export default function Home() {
         });
     };
 
-    if (expandSummary) {
-      setState(summaryTriggers, 'open');
-      setState(summaryContents, 'open');
-    } else {
-      setState(summaryTriggers, 'closed'); // Ensure closed if not expanding
-      setState(summaryContents, 'closed');
-    }
-
-    if (expandActions) {
-      setState(actionsTriggers, 'open');
-      setState(actionsContents, 'open');
-    } else {
-       setState(actionsTriggers, 'closed'); // Ensure closed if not expanding
-       setState(actionsContents, 'closed');
-    }
+    // Set states based on passed arguments (defaulting to closed)
+    setState(summaryTriggers, expandSummary ? 'open' : 'closed');
+    setState(summaryContents, expandSummary ? 'open' : 'closed');
+    setState(actionsTriggers, expandActions ? 'open' : 'closed');
+    setState(actionsContents, expandActions ? 'open' : 'closed');
 
     // Force redraw/reflow before html2canvas - small timeout
     setTimeout(() => {
@@ -724,44 +704,14 @@ export default function Home() {
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle> {/* Title uses foreground */}
-                 {/* AlertDialog Trigger for PDF Options */}
-                 <AlertDialog open={isPdfDialogOpen} onOpenChange={setIsPdfDialogOpen}>
-                    <AlertDialogTrigger asChild>
-                        <Button className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm" size="sm">
-                             <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
-                         </Button>
-                     </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>PDF Download Options</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Choose whether to expand the Summary and Suggested Actions sections in the generated PDF report.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="grid gap-4 py-4">
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                            id="expand-summary"
-                            checked={expandSummaryPdf}
-                            onCheckedChange={(checked) => setExpandSummaryPdf(Boolean(checked))}
-                            />
-                            <Label htmlFor="expand-summary" className="text-foreground">Expand Summary</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                            id="expand-actions"
-                            checked={expandActionsPdf}
-                            onCheckedChange={(checked) => setExpandActionsPdf(Boolean(checked))}
-                            />
-                            <Label htmlFor="expand-actions" className="text-foreground">Expand Suggested Actions</Label>
-                        </div>
-                        </div>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={generatePdfWithOptions}>Download PDF</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                 </AlertDialog>
+                 {/* Simple Download Button - No Dialog */}
+                 <Button
+                    onClick={() => downloadReport()} // Call directly, default is accordions closed
+                    className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
+                    size="sm"
+                 >
+                    <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
+                 </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
