@@ -925,11 +925,10 @@ export default function Home() {
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Use null for prediction points in actual data line
                                             type="linear" // Changed from monotone to linear
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
-                                            strokeWidth={2}
+                                            strokeWidth={0} // Make line invisible
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
-                                            connectNulls={true} // Ensure connectNulls is true
                                             isAnimationActive={false}
                                           />
                                            {/* Line segment specifically for predictions, starting from the last actual point */}
@@ -946,11 +945,10 @@ export default function Home() {
                                                 }}
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 type="linear" // Changed from monotone to linear
-                                                strokeWidth={2}
+                                                strokeWidth={0} // Make line invisible
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
-                                                connectNulls={true} // Connect prediction dots, including the bridge point
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
                                              />
@@ -1049,3 +1047,4 @@ export default function Home() {
     </div>
   );
 }
+
