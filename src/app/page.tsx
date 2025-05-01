@@ -116,18 +116,24 @@ export default function Home() {
     // Temporarily set text to black for PDF generation
     const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
-      '.text-foreground, .text-muted-foreground, text, tspan' // Added SVGTSpanElement
+      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan' // Select more elements, exclude colored suitability spans
     );
 
     elementsToColor.forEach(el => {
-      originalColors.set(el, el.style.fill || el.style.color);
-      if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-        el.style.fill = 'black';
-        el.style.color = ''; // Clear color style for SVG text
-      } else {
-        el.style.color = 'black';
-        el.style.fill = ''; // Clear fill style for HTML elements
-      }
+        // Ensure the element itself doesn't have a background color class that we want to keep
+        const elClasses = el.classList;
+        const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => elClasses.contains(cls));
+
+        if (!hasBgClass) {
+             originalColors.set(el, el.style.fill || el.style.color);
+             if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                 el.style.fill = 'black';
+                 el.style.color = ''; // Clear color style for SVG text
+             } else {
+                 el.style.color = 'black';
+                 el.style.fill = ''; // Clear fill style for HTML elements
+             }
+        }
     });
 
 
@@ -199,20 +205,23 @@ export default function Home() {
         .finally(() => {
             // Restore original colors
             elementsToColor.forEach(el => {
-            const originalColor = originalColors.get(el);
-            if (originalColor !== undefined) {
-                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                el.style.fill = originalColor;
-                } else {
-                el.style.color = originalColor;
-                }
-            } else {
-                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                el.style.fill = ''; // Reset to default
-                } else {
-                el.style.color = ''; // Reset to default
-                }
-            }
+                 const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
+                 if (!hasBgClass) {
+                     const originalColor = originalColors.get(el);
+                     if (originalColor !== undefined) {
+                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                             el.style.fill = originalColor;
+                         } else {
+                             el.style.color = originalColor;
+                         }
+                     } else {
+                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                             el.style.fill = ''; // Reset to default
+                         } else {
+                             el.style.color = ''; // Reset to default
+                         }
+                     }
+                 }
             });
 
 
@@ -854,26 +863,26 @@ export default function Home() {
                                           />
                                           {/* Line for actual data */}
                                           <Line
-                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Only plot non-predictions
+                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? undefined : payload[parameter.key as keyof AnalysisResult]} // Use undefined instead of null
                                             type="monotone" // Smooth line
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
-                                            strokeWidth={2.5}
+                                            strokeWidth={2} // Adjust stroke width if needed
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                              activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
-                                            connectNulls={true} // Connect lines across null points for actual data
+                                            connectNulls={false} // Set to false to prevent connecting across gaps where prediction starts
                                             isAnimationActive={false}
                                           />
                                            {/* Line segment specifically for predictions */}
                                            <Line
-                                                dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : null} // Only plot predictions
+                                                dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined} // Use undefined instead of null
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 type="monotone" // Smooth line for predictions too
-                                                strokeWidth={2.5}
+                                                strokeWidth={2} // Adjust stroke width if needed
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
-                                                connectNulls={true} // Connect prediction segments if there are gaps
+                                                connectNulls={false} // Set to false to prevent connecting gap between actual and prediction
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
                                              />
@@ -972,5 +981,4 @@ export default function Home() {
     </div>
   );
 }
-
 
