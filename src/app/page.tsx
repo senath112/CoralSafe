@@ -644,7 +644,7 @@ export default function Home() {
              {isLoading && (
                  <div className="w-full px-4 mt-4">
                      <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-white/80 mt-2">Analysis Progress: {analysisProgress.toFixed(0)}%</p>
+                     <p className="text-center text-sm text-white/80 mt-2">Analysis Progress: {analysisProgress.toFixed(0)}%</p> {/* Added percentage display */}
                  </div>
              )}
           </CardContent>
@@ -955,3 +955,4 @@ export default function Home() {
     </div>
   );
 }
+
