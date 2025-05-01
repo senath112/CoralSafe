@@ -114,21 +114,22 @@ export default function Home() {
     }
 
     // Temporarily set text to black for PDF generation
-    const originalColors = new Map<HTMLElement | SVGTextElement, string>();
-    const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement>(
-      '.text-foreground, .text-muted-foreground, text, tspan'
+    const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
+    const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
+      '.text-foreground, .text-muted-foreground, text, tspan' // Added SVGTSpanElement
     );
 
     elementsToColor.forEach(el => {
       originalColors.set(el, el.style.fill || el.style.color);
       if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
         el.style.fill = 'black';
-        el.style.color = '';
+        el.style.color = ''; // Clear color style for SVG text
       } else {
         el.style.color = 'black';
-        el.style.fill = '';
+        el.style.fill = ''; // Clear fill style for HTML elements
       }
     });
+
 
     // Temporarily expand accordions if requested
     const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
@@ -207,12 +208,13 @@ export default function Home() {
                 }
             } else {
                 if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                el.style.fill = '';
+                el.style.fill = ''; // Reset to default
                 } else {
-                el.style.color = '';
+                el.style.color = ''; // Reset to default
                 }
             }
             });
+
 
             // Restore original accordion states
             originalStates.forEach((state, el) => {
@@ -853,24 +855,25 @@ export default function Home() {
                                           {/* Line for actual data */}
                                           <Line
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Only plot non-predictions
-                                            type="monotone"
+                                            type="monotone" // Smooth line
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2.5}
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                              activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
-                                            connectNulls={true} // Connect nulls for the main line
+                                            connectNulls={true} // Connect lines across null points for actual data
                                             isAnimationActive={false}
                                           />
                                            {/* Line segment specifically for predictions */}
                                            <Line
                                                 dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : null} // Only plot predictions
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
+                                                type="monotone" // Smooth line for predictions too
                                                 strokeWidth={2.5}
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
-                                                connectNulls={true} // Connect nulls for the prediction line start
+                                                connectNulls={true} // Connect prediction segments if there are gaps
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
                                              />
@@ -969,3 +972,4 @@ export default function Home() {
     </div>
   );
 }
+
