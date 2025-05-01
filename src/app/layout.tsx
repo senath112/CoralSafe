@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable}`}> {/* Add font variable to html tag */}
+    <html lang="en" className={`${inter.variable}`}> {/* Remove extra whitespace here */}
       <body className={`font-sans antialiased`}> {/* Use font-sans utility class */}
         {children}
         <Toaster /> {/* Add Toaster component here */}
