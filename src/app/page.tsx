@@ -865,13 +865,13 @@ export default function Home() {
                                           <Line
                                             key={`${parameter.key}-actual`} // Add unique key
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? undefined : payload[parameter.key as keyof AnalysisResult]} // Use undefined instead of null
-                                            type="monotone" // Smooth line
+                                            type="linear" // Change from 'monotone' to 'linear'
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2} // Adjust stroke width if needed
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
                                              activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
                                             name={parameter.name}
-                                            connectNulls={false} // Set to false to prevent connecting across gaps where prediction starts
+                                            connectNulls={false} // Keep false to separate actual and prediction visually if desired
                                             isAnimationActive={false} // Disable animation
                                           />
                                            {/* Line segment specifically for predictions */}
@@ -879,12 +879,12 @@ export default function Home() {
                                                 key={`${parameter.key}-prediction`} // Add unique key
                                                 dataKey={(payload: AnalysisResult) => payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined} // Use undefined instead of null
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
-                                                type="monotone" // Smooth line for predictions too
+                                                type="linear" // Change from 'monotone' to 'linear'
                                                 strokeWidth={2} // Adjust stroke width if needed
                                                 strokeDasharray="5 5" // Dashed line for predictions
                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
                                                 activeDot={false} // No active dot effect for prediction line segment
-                                                connectNulls={false} // Set to false to prevent connecting gap between actual and prediction
+                                                connectNulls={false} // Keep false to separate actual and prediction visually if desired
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false} // Disable animation
                                              />
@@ -983,5 +983,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
