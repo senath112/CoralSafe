@@ -215,7 +215,7 @@ export default function Home() {
         html2canvas(input, {
             scale: 2,
             useCORS: true,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff' // Ensure a white background for the PDF
         })
         .then((canvas) => {
             const imgData = canvas.toDataURL('image/png');
@@ -712,7 +712,7 @@ export default function Home() {
            <CardHeader>
              <div className="flex items-center mb-4">
                <Avatar>
-                 <AvatarImage data-ai-hint="coral" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
+                 <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Use CardTitle instead of p */}
@@ -903,22 +903,26 @@ export default function Home() {
                                                 }
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
                                             />
-                                          <RechartsLegend content={<ChartLegendContent icon={chartConfig[parameter.key]?.icon} nameKey={parameter.key} payload={ // Pass necessary props
-                                              Object.entries(chartConfig)
-                                                .filter(([key]) => key === parameter.key || key === 'prediction') // Only show current param and prediction legend
-                                                .map(([key, config]) => ({
-                                                  value: config.label,
-                                                  type: key === 'prediction' ? 'dashed' : 'line',
-                                                  id: key,
-                                                  color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
-                                                  icon: config.icon // Pass icon
-                                                }))
-                                            } className="text-foreground" />} // Ensure legend text uses foreground
+                                          <RechartsLegend content={ <ChartLegendContent
+                                              nameKey={parameter.key}
+                                              payload={
+                                                Object.entries(chartConfig)
+                                                  .filter(([key]) => key === parameter.key || key === 'prediction') // Only show current param and prediction legend
+                                                  .map(([key, config]) => ({
+                                                    value: config.label,
+                                                    type: key === 'prediction' ? 'dashed' : 'line',
+                                                    id: key,
+                                                    color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
+                                                    icon: config.icon // Pass icon
+                                                  }))
+                                              }
+                                              className="text-foreground" // Ensure legend text uses foreground
+                                          /> }
                                           />
                                           {/* Line for actual data */}
                                           <Line
                                             key={`${parameter.key}-actual`} // Add unique key
-                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? undefined : payload[parameter.key as keyof AnalysisResult]} // Use undefined instead of null
+                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Use null for prediction points in actual data line
                                             type="monotone" // Smooth curve
                                             stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use color from chartConfig
                                             strokeWidth={2}
@@ -928,16 +932,17 @@ export default function Home() {
                                             connectNulls={false} // Do not connect over nulls for the main line
                                             isAnimationActive={false}
                                           />
-                                           {/* Line segment specifically for predictions */}
+                                           {/* Line segment specifically for predictions, starting from the last actual point */}
                                            <Line
                                                 key={`${parameter.key}-prediction`} // Add unique key
                                                 dataKey={(payload: AnalysisResult, index: number) => {
-                                                    // Include the last actual point to connect the lines
-                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction) - 1;
-                                                    if (index === lastActualIndex && lastActualIndex >= 0) {
-                                                        return analysisResults[lastActualIndex][parameter.key as keyof AnalysisResult];
+                                                    // Find the index of the last actual data point
+                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                                                    // Only render this line segment for the prediction points and the very last actual point
+                                                    if (payload.isPrediction || (lastActualIndex !== -1 && index === lastActualIndex -1)) {
+                                                        return payload[parameter.key as keyof AnalysisResult];
                                                     }
-                                                    return payload.isPrediction ? payload[parameter.key as keyof AnalysisResult] : undefined;
+                                                    return null; // Return null for actual data points before the last one
                                                 }}
                                                 stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use same base color
                                                 type="monotone" // Smooth curve
@@ -1044,3 +1049,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
