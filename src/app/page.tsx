@@ -1,51 +1,54 @@
 'use client';
 
-import {useState} from 'react';
+import {useState, useCallback, useRef, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Textarea} from '@/components/ui/textarea';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {Badge} from '@/components/ui/badge';
-import {cn} from '@/lib/utils';
-import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
+import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
+import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart'; // Corrected import path
+import type { ChartConfig } from "@/components/ui/chart"; // Import ChartConfig type
+import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer} from 'recharts'; // Keep Recharts imports if needed for customization
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
-import Image from 'next/image';
 import * as tf from '@tensorflow/tfjs';
-import {
-  Chart,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Brush,
-  Legend,
-} from 'recharts';
+import {useToast} from "@/hooks/use-toast"; // Ensure useToast is correctly imported
 import {
   Table,
   TableHeader,
   TableBody,
-  TableFooter,
   TableHead,
   TableRow,
   TableCell,
   TableCaption,
-} from "@/components/ui/table"
+} from "@/components/ui/table"; // Ensure Table components are imported
+import {jsPDF} from 'jspdf';
+import html2canvas from 'html2canvas';
+import Link from 'next/link'; // Import Link for social media icons
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge } from 'lucide-react'; // Import icons
+
 
 interface AnalysisResult {
-  location: string;
   time: string;
-  waterTemperature: string;
-  salinity: string;
-  pHLevel: string;
-  dissolvedOxygen: string;
-  turbidity: string;
-  nitrate: string;
-  summary: string | null;
-  improvements: string | null;
+  location: string;
+  waterTemperature: number;
+  salinity: number;
+  pHLevel: number;
+  dissolvedOxygen: number;
+  turbidity: number;
+  nitrate: number;
   isSuitable: boolean | null;
+  summary?: string;
+  improvements?: string[];
+  suitabilityIndex?: number;
+  isPrediction?: boolean; // Added to distinguish predictions
 }
 
 interface SensorData {
@@ -59,537 +62,990 @@ interface SensorData {
   nitrate: number;
 }
 
-interface ChartData {
-  time: string;
-  waterTemperature: number | null;
-  salinity: number | null;
-  pHLevel: number | null;
-  dissolvedOxygen: number | null;
-  turbidity: number | null;
-  nitrate: number | null;
-  isPrediction?: boolean;
+interface NormalizationParams {
+  min: tf.Tensor;
+  max: tf.Tensor;
 }
 
-// Define thresholds for environmental parameters
-const thresholds = {
-  temperatureIdeal: [24, 28],
-  temperatureCaution: [28, 30],
-  salinityIdeal: [33, 36],
-  salinityCaution: [31, 33, 36, 38],
-  pHIdeal: [8.0, 8.3],
-  pHCaution: [7.8, 8.0],
-  oxygenIdeal: 6.0,
-  oxygenCaution: [4.0, 6.0],
-  turbidityIdeal: 1.0,
-  turbidityCaution: [1.0, 3.0],
-  nitrateIdeal: 0.1,
-  nitrateCaution: [0.1, 0.3],
-};
+const sensorDataThresholds = defineSensorDataThresholds();
 
-const analyzeSensorData = (data: SensorData): { isSuitable: boolean, summary: string } => {
-  const {waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate} = data;
-  let summary = '';
-  let isSuitable = true;
+const parameters = [
+  {name: 'Water Temperature', key: 'waterTemperature', unit: '°C', icon: Thermometer},
+  {name: 'Salinity', key: 'salinity', unit: 'PSU', icon: Waves},
+  {name: 'pH Level', key: 'pHLevel', unit: '', icon: Beaker},
+  {name: 'Dissolved Oxygen', key: 'dissolvedOxygen', unit: 'mg/L', icon: Wind},
+  {name: 'Turbidity', key: 'turbidity', unit: 'NTU', icon: CloudFog},
+  {name: 'Nitrate', key: 'nitrate', unit: 'mg/L', icon: Droplet},
+];
 
-  if (waterTemperature < thresholds.temperatureIdeal[0] || waterTemperature > thresholds.temperatureIdeal[1]) {
-    isSuitable = false;
-    summary += `Temperature is outside the ideal range (${thresholds.temperatureIdeal[0]}°C - ${thresholds.temperatureIdeal[1]}°C). `;
-  }
-  if (salinity < thresholds.salinityIdeal[0] || salinity > thresholds.salinityIdeal[1]) {
-    isSuitable = false;
-    summary += `Salinity is outside the ideal range (${thresholds.salinityIdeal[0]} PSU - ${thresholds.salinityIdeal[1]} PSU). `;
-  }
-  if (pHLevel < thresholds.pHIdeal[0] || pHLevel > thresholds.pHIdeal[1]) {
-    isSuitable = false;
-    summary += `pH level is outside the ideal range (${thresholds.pHIdeal[0]} - ${thresholds.pHIdeal[1]}). `;
-  }
-  if (dissolvedOxygen < thresholds.oxygenIdeal) {
-    isSuitable = false;
-    summary += `Dissolved oxygen is below the ideal level (${thresholds.oxygenIdeal} mg/L). `;
-  }
-  if (turbidity > thresholds.turbidityIdeal) {
-    isSuitable = false;
-    summary += `Turbidity is above the ideal level (${thresholds.turbidityIdeal} NTU). `;
-  }
-  if (nitrate > thresholds.nitrateIdeal) {
-    isSuitable = false;
-    summary += `Nitrate concentration is above the ideal level (${thresholds.nitrateIdeal} mg/L). `;
-  }
-
-  if (summary === '') {
-    summary = 'All parameters are within the ideal ranges.';
-  }
-
-  return {isSuitable, summary};
-};
-
-const trainModel = async (data: SensorData[]) => {
-  const numRecords = data.length;
-  const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
-
-  // Prepare data for TensorFlow.js
-  const temperatures = data.map(item => item.waterTemperature);
-  const salinity = data.map(item => item.salinity);
-  const phLevels = data.map(item => item.pHLevel);
-  const dissolvedOxygen = data.map(item => item.dissolvedOxygen);
-  const turbidity = data.map(item => item.turbidity);
-  const nitrate = data.map(item => item.nitrate);
-
-  const inputTensor = tf.tensor2d(
-    [temperatures, salinity, phLevels, dissolvedOxygen, turbidity, nitrate],
-    [numFeatures, numRecords],
-  ).transpose();
-
-  // Define a simple sequential model
-  const model = tf.sequential();
-  model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
-  model.add(tf.layers.dense({units: 32, activation: 'relu'}));
-  model.add(tf.layers.dense({units: numFeatures}));
-
-  // Compile the model
-  model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
-
-  // Train the model
-  await model.fit(inputTensor, inputTensor, {epochs: 100});
-
-  return model;
-};
+// Chart Configuration
+const chartConfig: ChartConfig = {
+  waterTemperature: {label: "Water Temp (°C)", color: "hsl(var(--chart-1))", icon: Thermometer},
+  salinity: {label: "Salinity (PSU)", color: "hsl(var(--chart-2))", icon: Waves},
+  pHLevel: {label: "pH Level", color: "hsl(var(--chart-3))", icon: Beaker},
+  dissolvedOxygen: {label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind},
+  turbidity: {label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog},
+  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet}, // Changed color
+  prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>}, // Example prediction style
+} satisfies ChartConfig;
 
 export default function Home() {
-  const [sensorData, setSensorData] = useState('');
+  const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [overallSuitability, setOverallSuitability] = useState<boolean | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [allChartData, setAllChartData] = useState<ChartData[]>([]);
-  const [temperatureChartData, setTemperatureChartData] = useState<ChartData[]>([]);
-  const [salinityChartData, setSalinityChartData] = useState<ChartData[]>([]);
-  const [pHChartData, setPHChartData] = useState<ChartData[]>([]);
-  const [oxygenChartData, setOxygenChartData] = useState<ChartData[]>([]);
-  const [turbidityChartData, setTurbidityChartData] = useState<ChartData[]>([]);
-  const [nitrateChartData, setNitrateChartData] = useState<ChartData[]>([]);
+  const [model, setModel] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null); // Store model and norm params
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [analysisProgress, setAnalysisProgress] = useState<number>(0);
+  const {toast} = useToast();
+
+  const csvDataRef = useRef<string>('');
+  const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
+
+  // State for time tracking
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [remainingTimeText, setRemainingTimeText] = useState<string>('');
+
+   // Effect for updating time remaining
+   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (isLoading && startTime !== null) {
+      intervalId = setInterval(() => {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        setElapsedTime(elapsed);
+
+        if (analysisProgress > 0 && analysisProgress < 100) {
+          const totalEstimatedTime = elapsed / (analysisProgress / 100);
+          const remainingTimeMs = totalEstimatedTime - elapsed;
+          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+          const minutes = Math.floor(remainingSeconds / 60);
+          const seconds = remainingSeconds % 60;
+          if (minutes > 0) {
+            setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+          } else {
+            setRemainingTimeText(`~${seconds}s left`);
+          }
+        } else if (analysisProgress === 0) {
+          setRemainingTimeText('Estimating time...');
+        } else { // Progress is 100 or analysis finished
+          setRemainingTimeText('Finishing up...');
+        }
+      }, 1000); // Update every second
+    } else {
+      setElapsedTime(0); // Reset elapsed time when not loading
+       if (analysisProgress === 100) {
+          setRemainingTimeText('Analysis complete!');
+       } else {
+           setRemainingTimeText(''); // Clear remaining time text
+       }
+    }
+
+    // Cleanup function to clear the interval
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isLoading, startTime, analysisProgress]); // Dependencies
+
+
+  // Updated downloadReport to accept expansion options, defaulting to false if not provided
+  const downloadReport = (expandSummary = false, expandActions = false) => {
+    const input = reportRef.current; // Use the ref
+    if (!input) {
+      toast({
+        title: 'Error',
+        description: 'Report element not found.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Temporarily set text to black for PDF generation
+    const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
+    const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
+      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan' // Select more elements, exclude colored suitability spans
+    );
+
+    elementsToColor.forEach(el => {
+        // Ensure the element itself doesn't have a background color class that we want to keep
+        const elClasses = el.classList;
+        const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => elClasses.contains(cls));
+
+        if (!hasBgClass) {
+             originalColors.set(el, el.style.fill || el.style.color);
+             if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                 el.style.fill = 'black';
+                 el.style.color = ''; // Clear color style for SVG text
+             } else {
+                 el.style.color = 'black';
+                 el.style.fill = ''; // Clear fill style for HTML elements
+             }
+        }
+    });
+
+
+    // Temporarily expand accordions if requested
+    const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
+    const summaryContents = Array.from(input.querySelectorAll<HTMLElement>('[data-summary-content]'));
+    const actionsTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-actions-trigger]'));
+    const actionsContents = Array.from(input.querySelectorAll<HTMLElement>('[data-actions-content]'));
+
+    const originalStates = new Map<Element, string | null>();
+
+    const setState = (elements: Element[], state: 'open' | 'closed') => {
+        elements.forEach(el => {
+            // Only store original state if it hasn't been stored already for this element
+            if (!originalStates.has(el)) {
+                originalStates.set(el, el.getAttribute('data-state'));
+            }
+            el.setAttribute('data-state', state);
+        });
+    };
+
+    // Set states based on passed arguments (defaulting to closed)
+    setState(summaryTriggers, expandSummary ? 'open' : 'closed');
+    setState(summaryContents, expandSummary ? 'open' : 'closed');
+    setState(actionsTriggers, expandActions ? 'open' : 'closed');
+    setState(actionsContents, expandActions ? 'open' : 'closed');
+
+    // Force redraw/reflow before html2canvas - small timeout
+    setTimeout(() => {
+        html2canvas(input, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff' // Ensure a white background for the PDF
+        })
+        .then((canvas) => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            let heightLeft = pdfHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+            }
+
+            pdf.save('coral_safe_report.pdf');
+            toast({
+            title: 'Success',
+            description: 'Report downloaded successfully!',
+            });
+        })
+        .catch((error) => {
+            console.error('Error generating PDF:', error);
+            toast({
+            title: 'Error',
+            description: 'Failed to generate PDF. Please try again.',
+            variant: 'destructive',
+            });
+        })
+        .finally(() => {
+            // Restore original colors
+            elementsToColor.forEach(el => {
+                 const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
+                 if (!hasBgClass) {
+                     const originalColor = originalColors.get(el);
+                     if (originalColor !== undefined) {
+                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                             el.style.fill = originalColor;
+                         } else {
+                             el.style.color = originalColor;
+                         }
+                     } else {
+                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                             el.style.fill = ''; // Reset to default
+                         } else {
+                             el.style.color = ''; // Reset to default
+                         }
+                     }
+                 }
+            });
+
+
+            // Restore original accordion states
+            originalStates.forEach((state, el) => {
+                if (state) {
+                    el.setAttribute('data-state', state);
+                } else {
+                    el.removeAttribute('data-state');
+                }
+            });
+        });
+    }, 100); // Small delay for rendering changes
+  };
+
 
   const parseData = (data: string): SensorData[] => {
-    return data.split('\n')
-      .slice(1)
-      .map(entry => {
-        const parts = entry.split(',').map(item => item.trim());
-        if (parts.length !== 8) {
-          return null;
-        }
-        const [time, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
-        if (!location || !time || !waterTemperature || !salinity || !pHLevel || !dissolvedOxygen || !turbidity || !nitrate) {
-          return null;
-        }
-        return {
-          time,
-          location,
-          waterTemperature: parseFloat(waterTemperature),
-          salinity: parseFloat(salinity),
-          pHLevel: parseFloat(pHLevel),
-          dissolvedOxygen: parseFloat(dissolvedOxygen),
-          turbidity: parseFloat(turbidity),
-          nitrate: parseFloat(nitrate),
-        };
-      })
-      .filter(parsed => parsed !== null) as SensorData[];
+    console.log("Parsing data...");
+    // Splitting by newline to separate entries
+    const lines = data.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length < 2) {
+        console.warn("No data rows found after header.");
+        return [];
+    }
+    const header = lines[0].split(',').map(item => item.trim());
+    const expectedHeaders = ['Date', 'Location', 'Water_Temperature_C', 'Salinity_PSU', 'pH_Level', 'Dissolved_Oxygen_mg_L', 'Turbidity_NTU', 'Nitrate_mg_L'];
+
+    // Basic header check
+    if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
+        console.warn("CSV header doesn't match expected format. Proceeding, but results might be inaccurate.");
+        // You could throw an error here if strict format is required
+        // toast({ title: "Warning", description: "CSV header doesn't match expected format. Results might be inaccurate.", variant: "destructive" });
+    }
+
+    const parsedEntries = lines.slice(1).map((entry, index) => { // Skip the header row
+      console.log(`Parsing line ${index + 1}: ${entry}`);
+      const parts = entry.split(',').map(item => item.trim());
+      if (parts.length !== expectedHeaders.length) {
+         console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
+        return null; // Skip incomplete entries
+      }
+
+      const [date, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
+
+      // Convert to appropriate types
+      const waterTemperatureNum = parseFloat(waterTemperature);
+      const salinityNum = parseFloat(salinity);
+      const pHLevelNum = parseFloat(pHLevel);
+      const dissolvedOxygenNum = parseFloat(dissolvedOxygen);
+      const turbidityNum = parseFloat(turbidity);
+      const nitrateNum = parseFloat(nitrate);
+
+      // Validate numeric conversions
+      if (
+        isNaN(waterTemperatureNum) ||
+        isNaN(salinityNum) ||
+        isNaN(pHLevelNum) ||
+        isNaN(dissolvedOxygenNum) ||
+        isNaN(turbidityNum) ||
+        isNaN(nitrateNum)
+      ) {
+         console.warn(`Skipping entry with invalid numeric values (line ${index + 2}): ${entry}`);
+        return null;
+      }
+
+      return {
+        time: date,
+        location: location,
+        waterTemperature: waterTemperatureNum,
+        salinity: salinityNum,
+        pHLevel: pHLevelNum,
+        dissolvedOxygen: dissolvedOxygenNum,
+        turbidity: turbidityNum,
+        nitrate: nitrateNum,
+      };
+    }).filter((item): item is SensorData => item !== null); // Type guard to filter out nulls
+    console.log("Parsing completed. Parsed entries:", parsedEntries);
+    return parsedEntries;
   };
 
-  const analyzeData = async () => {
-    setIsLoading(true);
-    setProgress(0);
-    setAnalysisResults([]);
-    setOverallSuitability(null);
-    setErrorMessage(null);
-    setAllChartData([]);
-    setTemperatureChartData([]);
-    setSalinityChartData([]);
-    setPHChartData([]);
-    setOxygenChartData([]);
-    setTurbidityChartData([]);
-    setNitrateChartData([]);
+  // Function to normalize data using Min-Max scaling
+  const normalizeData = (tensor: tf.Tensor): { normalized: tf.Tensor; normParams: NormalizationParams } => {
+    const min = tensor.min(0);
+    const max = tensor.max(0);
+    // Add a small epsilon to prevent division by zero if min and max are the same
+    const range = max.sub(min).add(tf.scalar(1e-7));
+    const normalized = tensor.sub(min).div(range);
+    return { normalized, normParams: { min, max } };
+  };
 
-    const parsedData = parseData(sensorData);
-    const totalEntries = parsedData.length;
-    let completedEntries = 0;
+  // Function to denormalize data
+  const denormalizeData = (tensor: tf.Tensor, normParams: NormalizationParams): tf.Tensor => {
+    const range = normParams.max.sub(normParams.min).add(tf.scalar(1e-7));
+    return tensor.mul(range).add(normParams.min);
+  };
+
+  const trainModel = async (data: SensorData[]): Promise<{ model: tf.Sequential; normParams: NormalizationParams } | null> => {
+    console.log("Starting model training...");
+    if (data.length < 2) { // Need at least 2 data points to determine range for normalization
+      console.log("Not enough data to train on. Skipping model training.");
+      toast({
+            title: "Training Skipped",
+            description: "Need at least 2 data points for model training and prediction.",
+            variant: "destructive",
+      });
+      return null;
+    }
+
+    const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
+
+    // Prepare data for TensorFlow.js
+    const features = data.map(item => [
+        item.waterTemperature,
+        item.salinity,
+        item.pHLevel,
+        item.dissolvedOxygen,
+        item.turbidity,
+        item.nitrate
+    ]);
+    console.log("Prepared features for training:", features);
+
+    let inputTensor: tf.Tensor2D | null = null;
+    let normalizedTensor: tf.Tensor2D | null = null;
+    let normParams: NormalizationParams | null = null;
 
     try {
-      const model = await trainModel(parsedData);
+        inputTensor = tf.tensor2d(features); // Shape: [numRecords, numFeatures]
+        console.log("Created input tensor:", inputTensor.shape);
 
-      const results = parsedData.map((item) => {
-        const {isSuitable, summary} = analyzeSensorData(item);
-        completedEntries++;
-        setProgress((completedEntries / totalEntries) * 100);
+        // Normalize the data
+        const normResult = normalizeData(inputTensor);
+        normalizedTensor = normResult.normalized as tf.Tensor2D;
+        normParams = normResult.normParams;
+        console.log("Normalized input tensor:", normalizedTensor.shape);
+        console.log("Normalization params (min):", await normParams.min.data());
+        console.log("Normalization params (max):", await normParams.max.data());
 
-        return {
-          location: item.location,
-          time: item.time,
-          waterTemperature: item.waterTemperature.toString(),
-          salinity: item.salinity.toString(),
-          pHLevel: item.pHLevel.toString(),
-          dissolvedOxygen: item.dissolvedOxygen.toString(),
-          turbidity: item.turbidity.toString(),
-          nitrate: item.nitrate.toString(),
-          summary: summary,
-          improvements: null, // Since GenAI is removed
-          isSuitable: isSuitable,
-        };
-      });
+        // Define a simple sequential model
+        const model = tf.sequential();
+        model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
+        model.add(tf.layers.dense({units: 32, activation: 'relu'}));
+        model.add(tf.layers.dense({units: numFeatures})); // Output layer with numFeatures units
+        console.log("Defined model architecture.");
 
-      setAnalysisResults(results);
+        // Compile the model
+        model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
+        console.log("Compiled model.");
 
-      // Determine overall suitability
-      const allSuitable = results.every(result => result.isSuitable === true);
-      setOverallSuitability(allSuitable);
-
-      // Prepare initial chart data
-      const initialChartData = parsedData.map(result => ({
-        time: result.time,
-        waterTemperature: result.waterTemperature,
-        salinity: result.salinity,
-        pHLevel: result.pHLevel,
-        dissolvedOxygen: result.dissolvedOxygen,
-        turbidity: result.turbidity,
-        nitrate: result.nitrate,
-      }));
-
-      // Limit initial data to the latest 95 records to accommodate 5 prediction points
-      const limitedInitialChartData = initialChartData.slice(Math.max(initialChartData.length - 95, 0));
-
-      // Predict future data points using TensorFlow.js model
-      if (model && parsedData.length > 0) {
-        const numPredictions = 5;
-        const predictedChartData: ChartData[] = [];
-        let previousRecord: SensorData = parsedData[parsedData.length - 1]; // Start with the last actual record
-  
-        for (let i = 0; i < numPredictions; i++) {
-          // Prepare the input tensor using the last available record
-          const inputTensor = tf.tensor2d(
-            [
-              [
-                previousRecord.waterTemperature,
-                previousRecord.salinity,
-                previousRecord.pHLevel,
-                previousRecord.dissolvedOxygen,
-                previousRecord.turbidity,
-                previousRecord.nitrate,
-              ],
-            ],
-            [1, 6]
-          );
-  
-          // Generate predictions
-          const predictions = model.predict(inputTensor) as tf.Tensor<tf.Rank.R2>;
-          const predictedValues = await predictions.data();
-  
-          // Create a new predicted record
-          const predictionTime = `P${i + 1}`;
-          const newRecord: SensorData = {
-            time: predictionTime,
-            location: previousRecord.location, // Assume location remains the same
-            waterTemperature: predictedValues[0],
-            salinity: predictedValues[1],
-            pHLevel: predictedValues[2],
-            dissolvedOxygen: predictedValues[3],
-            turbidity: predictedValues[4],
-            nitrate: predictedValues[5],
-          };
-  
-          predictedChartData.push({
-            time: predictionTime,
-            waterTemperature: predictedValues[0],
-            salinity: predictedValues[1],
-            pHLevel: predictedValues[2],
-            dissolvedOxygen: predictedValues[3],
-            turbidity: predictedValues[4],
-            nitrate: predictedValues[5],
-            isPrediction: true, // Mark as prediction
-          });
-  
-          previousRecord = newRecord; // Use the new predicted record for the next prediction
-        }
-
-        // Combine historical data with predicted data for overall chart
-        const combinedChartData = [...limitedInitialChartData, ...predictedChartData];
-        setAllChartData(combinedChartData.slice(-100));
-
-        // Prepare data for individual charts
-        const temperatureData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.waterTemperature})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.waterTemperature, isPrediction: true}))];
-        setTemperatureChartData(temperatureData.slice(-100));
-
-        const salinityData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.salinity})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.salinity, isPrediction: true}))];
-        setSalinityChartData(salinityData.slice(-100));
-
-        const pHData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.pHLevel})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.pHLevel, isPrediction: true}))];
-        setPHChartData(pHData.slice(-100));
-
-        const oxygenData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.dissolvedOxygen})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.dissolvedOxygen, isPrediction: true}))];
-        setOxygenChartData(oxygenData.slice(-100));
-
-        const turbidityData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.turbidity})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.turbidity, isPrediction: true}))];
-        setTurbidityChartData(turbidityData.slice(-100));
-
-        const nitrateData = [...limitedInitialChartData.map(item => ({time: item.time, value: item.nitrate})),
-          ...predictedChartData.map(item => ({time: item.time, value: item.nitrate, isPrediction: true}))];
-        setNitrateChartData(nitrateData.slice(-100));
-      }
-    } catch (error: any) {
-      console.error('Error analyzing data:', error);
-      setErrorMessage('Failed to analyze data. Please check the input format and try again.');
+        // Train the model on NORMALIZED data
+        console.log("Starting model fitting...");
+        await model.fit(normalizedTensor, normalizedTensor, {
+            epochs: 150, // Increased epochs slightly
+            batchSize: Math.max(1, Math.floor(data.length / 10)), // Dynamic batch size
+            shuffle: true,
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                     console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
+                }
+            }
+        });
+        console.log("Model training completed successfully.");
+        // Return the model AND normalization parameters
+        // Important: normParams must not be null here
+        return { model, normParams: normParams! };
+    } catch (error) {
+        console.error("Error during model training:", error);
+        toast({
+            title: "Model Training Error",
+            description: "An error occurred while training the prediction model.",
+            variant: "destructive",
+        });
+        return null;
     } finally {
-      setIsLoading(false);
-      setProgress(100);
+         // Ensure tensors are disposed even if errors occur
+        if (inputTensor) tf.dispose(inputTensor);
+        if (normalizedTensor) tf.dispose(normalizedTensor);
+        // normParams tensors (min/max) are needed later, DO NOT dispose here
+        console.log("Disposed training tensors (input, normalized). Kept normalization params.");
     }
   };
 
-  const getParameterColor = (parameter: string, value: number): string => {
-    switch (parameter) {
-      case 'waterTemperature':
-        if (value >= thresholds.temperatureIdeal[0] && value <= thresholds.temperatureIdeal[1]) {
-          return 'green';
-        } else if (value >= thresholds.temperatureCaution[0] && value <= thresholds.temperatureCaution[1]) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      case 'salinity':
-        if (value >= thresholds.salinityIdeal[0] && value <= thresholds.salinityIdeal[1]) {
-          return 'green';
-        } else if (
-          (value >= thresholds.salinityCaution[0] && value <= thresholds.salinityCaution[1]) ||
-          (value >= thresholds.salinityCaution[2] && value <= thresholds.salinityCaution[3])
-        ) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      case 'pHLevel':
-        if (value >= thresholds.pHIdeal[0] && value <= thresholds.pHIdeal[1]) {
-          return 'green';
-        } else if (value >= thresholds.pHCaution[0] && value <= thresholds.pHCaution[1]) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      case 'dissolvedOxygen':
-        if (value > thresholds.oxygenIdeal) {
-          return 'green';
-        } else if (value >= thresholds.oxygenCaution[0] && value <= thresholds.oxygenCaution[1]) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      case 'turbidity':
-        if (value <= thresholds.turbidityIdeal) {
-          return 'green';
-        } else if (value >= thresholds.turbidityCaution[0] && value <= thresholds.turbidityCaution[1]) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      case 'nitrate':
-        if (value <= thresholds.nitrateIdeal) {
-          return 'green';
-        } else if (value >= thresholds.nitrateCaution[0] && value <= thresholds.nitrateCaution[1]) {
-          return 'yellow';
-        } else {
-          return 'red';
-        }
-      default:
-        return 'black';
-    }
-  };
 
-  const renderChart = (data: any[], dataKey: string, name: string, strokeColor: string) => (
-    <Card>
-      <CardHeader>
-        <CardTitle>{name} Over Time</CardTitle>
-        <CardDescription>Trends of {name} over time, including predictions.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="value" stroke={strokeColor} name={name} />
-            <Brush dataKey="time" stroke={strokeColor} />
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
+ const analyzeData = async () => {
+    console.log("analyzeData function called.");
+    console.log("Current sensor data state:", sensorData);
+    if (!sensorData.trim()) {
+      console.log("Sensor data is empty. Aborting analysis.");
+       toast({
+         title: 'Input Error',
+         description: 'Please paste sensor data before analyzing.',
+         variant: 'destructive',
+       });
+      return;
+    }
+
+    setIsLoading(true);
+    setAnalysisProgress(0);
+    setAnalysisResults([]); // Clear previous results
+    setStartTime(Date.now()); // Record start time
+    console.log("Set loading state to true, cleared previous results, recorded start time.");
+    csvDataRef.current = sensorData; // Store raw CSV data if needed
+
+    try {
+        console.log("Parsing sensor data...");
+        const parsedData = parseData(sensorData);
+        console.log("Parsed data:", parsedData);
+
+        if (!parsedData || parsedData.length === 0) {
+            console.log("No valid data after parsing.");
+            toast({
+                title: 'Error',
+                description: 'No valid data found or data format is incorrect. Please check your input.',
+                variant: 'destructive',
+            });
+            setIsLoading(false);
+            setStartTime(null); // Reset start time on error
+            return;
+        }
+
+        // Train the model first
+        console.log("Training model...");
+        setAnalysisProgress(10); // Start progress
+        const trainingResult = await trainModel(parsedData);
+        setModel(trainingResult); // Save the trained model and norm params
+        console.log("Model training finished. Training result:", trainingResult);
+        setAnalysisProgress(30); // Progress after training
+
+        // Process each data point for suitability analysis
+        console.log("Analyzing each data point for suitability...");
+        let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
+            console.log(`Analyzing data point ${index}:`, data);
+            const {isSuitable, summary, threateningFactors} = analyzeSensorData(
+                data,
+                sensorDataThresholds
+            );
+            const suitabilityIndex = calculateSuitabilityIndex(data, sensorDataThresholds);
+             console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
+
+            let improvements: string[] = [];
+             if (isSuitable === false) { // Check explicitly for false, as null means prediction
+                 console.log(`Generating improvements for unsuitable point ${index}`);
+                 improvements = Object.entries(threateningFactors)
+                 .filter(([_, value]) => value) // Filter only true (threatening) factors
+                 .map(([key]) => {
+                     switch(key) {
+                         case 'temperature': return "Address high/low water temperature issues.";
+                         case 'salinity': return "Investigate and mitigate salinity fluctuations.";
+                         case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
+                         case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
+                         case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
+                         case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
+                         default: return `Address issues related to ${key}.`;
+                     }
+                 });
+                 if (improvements.length === 0) {
+                    // If marked unsuitable but no specific factor crossed the 'threatening' line,
+                    // it means multiple factors are likely in the 'caution' zone.
+                    improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
+                 }
+                 console.log(`Improvements for point ${index}:`, improvements);
+            } else if (isSuitable === true) {
+                 // Check if there are any caution factors even if overall suitable
+                 const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
+                 if (cautions) {
+                     improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+                 } else {
+                     improvements = ["Environment appears ideal, continue monitoring."];
+                 }
+            } else {
+                 improvements = []; // No improvements for predictions (isSuitable is null)
+            }
+
+
+            // Update progress during analysis phase (30% to 60%)
+            const currentProgress = 30 + ((index + 1) / parsedData.length) * 30;
+            setAnalysisProgress(currentProgress);
+            console.log(`Analysis progress: ${currentProgress.toFixed(0)}%`);
+
+            return {
+                ...data,
+                isSuitable,
+                summary,
+                improvements,
+                suitabilityIndex,
+                isPrediction: false,
+            };
+        });
+        console.log("Finished suitability analysis for all data points.");
+
+        // Perform predictions only if the model was trained successfully
+        if (trainingResult) {
+            console.log("Starting predictions...");
+            const { model: trainedModel, normParams } = trainingResult;
+            const numPredictions = 5;
+            // IMPORTANT: Make a deep copy for iterative prediction
+             let currentInputDataArray: AnalysisResult[] = JSON.parse(JSON.stringify(detailedResults));
+             let predictedResults: AnalysisResult[] = [];
+
+            for (let i = 0; i < numPredictions; i++) {
+                 console.log(`Predicting step P${i + 1}`);
+                 // Prepare input tensor from the *last* element of the current data array
+                 const lastKnownData = currentInputDataArray[currentInputDataArray.length - 1];
+                 const featuresToPredict = [
+                    lastKnownData.waterTemperature,
+                    lastKnownData.salinity,
+                    lastKnownData.pHLevel,
+                    lastKnownData.dissolvedOxygen,
+                    lastKnownData.turbidity,
+                    lastKnownData.nitrate,
+                 ];
+                 let inputTensorRaw: tf.Tensor2D | null = null;
+                 let inputTensorNormalized: tf.Tensor2D | null = null;
+                 let predictionTensorNormalized: tf.Tensor<tf.Rank.R2> | null = null;
+                 let predictionTensorDenormalized: tf.Tensor<tf.Rank.R2> | null = null;
+
+                 try {
+                     inputTensorRaw = tf.tensor2d([featuresToPredict]); // Shape: [1, numFeatures]
+                     console.log(`Raw input for prediction P${i + 1}:`, featuresToPredict);
+
+                     // Normalize the input for prediction using the saved normParams
+                     inputTensorNormalized = inputTensorRaw.sub(normParams.min).div(normParams.max.sub(normParams.min).add(tf.scalar(1e-7))) as tf.Tensor2D;
+                     console.log(`Normalized input for prediction P${i + 1}:`, await inputTensorNormalized.data());
+
+                    // Generate prediction (output will be normalized)
+                     predictionTensorNormalized = trainedModel.predict(inputTensorNormalized) as tf.Tensor<tf.Rank.R2>;
+                     console.log(`Normalized prediction P${i + 1}:`, await predictionTensorNormalized.data());
+
+                     // De-normalize the prediction
+                     predictionTensorDenormalized = denormalizeData(predictionTensorNormalized, normParams);
+                     const predictedValuesRaw = await predictionTensorDenormalized.data();
+                     console.log(`De-normalized predicted values for P${i + 1}:`, predictedValuesRaw);
+
+                     // Add slight random variations for realism AFTER de-normalization
+                    const predictedResult: AnalysisResult = {
+                        time: `P${i + 1}`,
+                        location: lastKnownData.location, // Assume same location
+                        // Apply variations to de-normalized values, ensuring non-negative results
+                        waterTemperature: Math.max(0, predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1),
+                        salinity: Math.max(0, predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1),
+                        pHLevel: Math.max(7, Math.min(9, predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01)), // Constrain pH
+                        dissolvedOxygen: Math.max(0, predictedValuesRaw[3] + (Math.random() - 0.5) * 0.1),
+                        turbidity: Math.max(0, predictedValuesRaw[4] + (Math.random() - 0.5) * 0.05),
+                        nitrate: Math.max(0, predictedValuesRaw[5] + (Math.random() - 0.5) * 0.01),
+                        isSuitable: null, // Suitability is not determined for predictions
+                        summary: 'Prediction',
+                        improvements: [],
+                        suitabilityIndex: undefined, // No suitability index for predictions
+                        isPrediction: true,
+                    };
+                     console.log(`Formatted prediction result P${i + 1}:`, predictedResult);
+
+                    predictedResults.push(predictedResult);
+
+                     // Add this prediction to the array for the next prediction step's input
+                     // **Crucially, use the predicted data for the next prediction**
+                     currentInputDataArray.push(predictedResult);
+
+                 } finally {
+                    // Dispose tensors used in this prediction step
+                    if (inputTensorRaw) tf.dispose(inputTensorRaw);
+                    if (inputTensorNormalized) tf.dispose(inputTensorNormalized);
+                    if (predictionTensorNormalized) tf.dispose(predictionTensorNormalized);
+                    if (predictionTensorDenormalized) tf.dispose(predictionTensorDenormalized);
+                    console.log(`Disposed tensors for prediction P${i + 1}`);
+                 }
+
+                // Update progress during prediction phase (60% to 100%)
+                const predictionProgress = 60 + ((i + 1) / numPredictions) * 40;
+                setAnalysisProgress(predictionProgress);
+                console.log(`Prediction progress: ${predictionProgress.toFixed(0)}%`);
+            }
+            // Dispose the normalization parameter tensors after all predictions are done
+             if (normParams) {
+                tf.dispose([normParams.min, normParams.max]);
+                console.log("Disposed normalization parameter tensors.");
+             } else {
+                 console.warn("Normalization parameters were null, cannot dispose.");
+             }
+
+             // Combine original analyzed results with new predictions
+             detailedResults = [...detailedResults, ...predictedResults];
+
+            console.log("Finished predictions.");
+        } else {
+             console.log("Model training failed or skipped. No predictions will be made.");
+             setAnalysisProgress(100); // If no model, progress is complete after analysis
+             toast({
+                 title: "Prediction Skipped",
+                 description: "Model training failed or was skipped, so predictions could not be made.",
+                 variant: "destructive", // Or "default" if just informational
+             });
+        }
+
+        console.log("Final analysis results (including predictions):", detailedResults);
+        setAnalysisResults(detailedResults);
+        toast({
+            title: 'Success',
+            description: 'Data analyzed and predictions generated successfully!',
+        });
+
+    } catch (error: any) {
+        console.error('Error during analysis:', error);
+        toast({
+            title: 'Error',
+            description: `An error occurred: ${error.message}. Check console for details.`,
+            variant: 'destructive',
+        });
+        setAnalysisProgress(0); // Reset progress on error
+    } finally {
+        console.log("Analysis process finished. Setting loading state to false.");
+        setIsLoading(false);
+        setStartTime(null); // Reset start time when done or on error
+        // Ensure progress completes if successful or if it stopped partway
+        if (analysisProgress < 100) { // Check if progress needs setting to 100
+             setAnalysisProgress(100);
+         }
+    }
+};
+
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
-      <div className="max-w-5xl w-full space-y-8">
-        <Card className="bg-card shadow-md rounded-md">
-          <CardHeader>
-            <CardTitle>
-              <div className="flex items-center">
-                <Image
-                  src="https://picsum.photos/40/40"
-                  alt="CoralSafe Logo"
-                  width={40}
-                  height={40}
-                  className="mr-2 rounded-full"
-                />
-                <span className="text-lg font-semibold">CoralSafe: Sensor Data Analyzer</span>
-              </div>
-            </CardTitle>
-            <CardDescription>
-              Enter sensor data for a reef location over multiple times, separated by newlines.
-              Use a comma-separated format: Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L.
+    <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground"> {/* Added text-foreground */}
+
+      {/* Header Section */}
+      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm"> {/* Header text remains white */}
+         <div className="flex items-center justify-center mb-2">
+            <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
+            <h1 className="text-4xl font-bold">CoralGuard</h1>
+          </div>
+        <p className="text-lg text-cyan-100">V2.0 - Mariana</p>
+        <p className="mt-4 text-sm text-blue-200">
+          Made with love by Senath Sethmika
+        </p>
+        {/* Removed social media links */}
+      </header>
+
+      <div className="max-w-7xl w-full space-y-8">
+        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30"> {/* Card text uses foreground */}
+           <CardHeader>
+             <div className="flex items-center mb-4">
+               <Avatar>
+                 <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
+                 <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
+               </Avatar>
+               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Use CardTitle instead of p */}
+             </div>
+
+            <CardDescription className="text-muted-foreground text-sm"> {/* Description uses muted foreground */}
+              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div> {/* Use div instead of p */}
+              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div> {/* Use div instead of p */}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-4">
-              Sensor Data Input
-            </div>
             <Textarea
-              placeholder="Paste sensor data here"
-              rows={4}
+              placeholder="Example:&#10;2023-01-01,Reef A,26.5,35.2,8.1,6.5,0.8,0.05&#10;2023-01-02,Reef A,26.7,35.1,8.1,6.6,0.7,0.04"
               value={sensorData}
-              onChange={(e) => setSensorData(e.target.value)}
-              className="shadow-sm rounded-md"
+              onChange={(e) => {
+                console.log("Sensor data changed:", e.target.value);
+                setSensorData(e.target.value);
+              }}
+              className="min-h-[150px] text-sm p-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" // Ensure textarea text is visible
             />
-            <Button onClick={analyzeData} disabled={isLoading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-4 rounded-md">
-              {isLoading ? 'Analyzing...' : 'Analyze Data'}
+            <Button
+              onClick={analyzeData} // Correctly bind the function
+              disabled={isLoading || !sensorData.trim()}
+              className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
+            >
+              <Activity className="w-5 h-5 mr-2"/> {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
-            {isLoading && (
-              <Progress value={progress} className="w-full mt-2" />
-            )}
-            {errorMessage && (
-              <Alert variant="destructive" className="mt-4 rounded-md">
-                <AlertTitle>Error</AlertTitle>
-                {errorMessage}
-              </Alert>
-            )}
+             {isLoading && (
+                 <div className="w-full px-4 mt-4">
+                     <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
+                     <p className="text-center text-sm text-foreground mt-2"> {/* Changed text color to text-foreground */}
+                        Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
+                     </p> {/* Added percentage and time remaining */}
+                 </div>
+             )}
           </CardContent>
         </Card>
 
-        {analysisResults.length > 0 && (
-          <Card className="shadow-md rounded-md">
-            <CardHeader>
-              <CardTitle>Analysis Results</CardTitle>
-              <CardDescription>Detailed analysis of sensor data for the location over time.</CardDescription>
+
+      {/* Analysis Results Table */}
+      {analysisResults.length > 0 && (
+          <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle> {/* Title uses foreground */}
+                 {/* Simple Download Button - No Dialog */}
+                 <Button
+                    onClick={() => downloadReport()} // Call directly, default is accordions closed
+                    className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
+                    size="sm"
+                 >
+                    <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
+                 </Button>
             </CardHeader>
-            <CardContent>
-              <Table className="rounded-md shadow-md">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-left font-medium py-2">Time</TableHead>
-                    <TableHead className="text-left font-medium py-2">Location</TableHead>
-                    <TableHead className="text-left font-medium py-2">Suitability</TableHead>
-                    <TableHead className="text-left font-medium py-2">Water Temperature</TableHead>
-                    <TableHead className="text-left font-medium py-2">Salinity</TableHead>
-                    <TableHead className="text-left font-medium py-2">pH Level</TableHead>
-                    <TableHead className="text-left font-medium py-2">Dissolved Oxygen</TableHead>
-                    <TableHead className="text-left font-medium py-2">Turbidity</TableHead>
-                    <TableHead className="text-left font-medium py-2">Nitrate</TableHead>
-                    <TableHead className="text-left font-medium py-2">Summary</TableHead>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+              <Table className="min-w-full">
+                <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
+                  <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead> {/* Header uses foreground */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {analysisResults.map((result, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="py-2">{result.time}</TableCell>
-                      <TableCell className="py-2">{result.location}</TableCell>
-                       <TableCell className="py-2">
-                        {result.isSuitable === null ? (
-                          'Analyzing...'
-                        ) : result.isSuitable ? (
-                          <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }} className="rounded-md">
-                            Suitable
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="rounded-md">
-                            Threatening
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('waterTemperature', parseFloat(result.waterTemperature)), borderRadius: '0.5rem' }}>{result.waterTemperature}</TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('salinity', parseFloat(result.salinity)), borderRadius: '0.5rem' }}>{result.salinity}</TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('pHLevel', parseFloat(result.pHLevel)), borderRadius: '0.5rem' }}>{result.pHLevel}</TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('dissolvedOxygen', parseFloat(result.dissolvedOxygen)), borderRadius: '0.5rem' }}>{result.dissolvedOxygen}</TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('turbidity', parseFloat(result.turbidity)), borderRadius: '0.5rem' }}>{result.turbidity}</TableCell>
-                      <TableCell className="py-2" style={{ backgroundColor: getParameterColor('nitrate', parseFloat(result.nitrate)), borderRadius: '0.5rem' }}>{result.nitrate}</TableCell>
-                       <TableCell className="py-2">
-                        {result.summary ? (
-                          <Accordion type="single" collapsible>
-                            <AccordionItem value={`summary-${index}`}>
-                              <AccordionTrigger className="text-sm font-medium">
-                                View Summary
-                              </AccordionTrigger>
-                              <AccordionContent className="text-sm text-muted-foreground">
-                                {result.summary}
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {analysisResults.map((result, index) => {
+                      const isPrediction = result.isSuitable === null; // Check if it's a prediction
+                      let suitabilityClass = '';
+                      let suitabilityText = '';
+                      let suitabilityIndexText = result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : '';
+
+
+                      if (isPrediction) {
+                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'; // Prediction text color adapts
+                          suitabilityText = 'Prediction';
+                          suitabilityIndexText = ''; // No index for predictions
+                      } else {
+                           const isIdeal = result.isSuitable === true && !analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           const isWarning = result.isSuitable === true && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           const isThreatening = result.isSuitable === false;
+
+                           if (isIdeal) {
+                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200'; // Specific color for ideal
+                               suitabilityText = 'Suitable';
+                           } else if (isWarning) {
+                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200'; // Specific color for warning
+                               suitabilityText = 'Warning';
+                           } else { // Must be Threatening
+                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200'; // Specific color for threatening
+                               suitabilityText = 'Threatening';
+                           }
+                       }
+
+
+                    return (
+                      <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
+                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
+                                {suitabilityText} {suitabilityIndexText}
+                            </span>
+                        </TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                         <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
+                            <Accordion type="single" collapsible className="w-full">
+                              <AccordionItem value={`summary-${index}`} className="border-b-0">
+                                <AccordionTrigger data-summary-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionContent data-summary-content className="text-xs pt-1 pb-2 text-muted-foreground"> {/* Content uses muted foreground */}
+                                  {result.summary || 'N/A'}
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                        </TableCell>
+                         <TableCell className="py-2 px-4">
+                            <Accordion type="single" collapsible className="w-full">
+                              <AccordionItem value={`actions-${index}`} className="border-b-0">
+                                <AccordionTrigger data-actions-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionContent data-actions-content>
+                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground"> {/* Content uses muted foreground */}
+                                       {result.improvements && result.improvements.length > 0 ? (
+                                           result.improvements.map((improvement, i) => (
+                                               <li key={i}>{improvement}</li>
+                                            ))
+                                       ) : (
+                                           <li>No specific actions suggested.</li>
+                                       )}
+                                   </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
-              {overallSuitability !== null && (
-                <div className="mt-4">
-                  Overall Suitability:
-                  {overallSuitability ? (
-                    <Badge variant="outline" style={{ backgroundColor: 'green', color: 'white' }} className="ml-2 rounded-md">
-                      Suitable
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="ml-2 rounded-md">
-                      Threatening
-                    </Badge>
-                  )}
-                </div>
-              )}
+              </div>
             </CardContent>
           </Card>
+      )}
+
+        {/* Charts Section */}
+        {analysisResults.length > 0 && (
+            <Accordion type="multiple" className="w-full space-y-4">
+                {parameters.map((parameter) => (
+                     <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
+                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
+                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground"> {/* Trigger uses foreground */}
+                                <div className="flex items-center">
+                                    <parameter.icon className="w-5 h-5 mr-2 text-cyan-500"/>
+                                    {parameter.name} Trends
+                                </div>
+                                {/* Chevron is automatically added by AccordionTrigger */}
+                            </AccordionTrigger>
+                             <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                                <p className="text-sm text-muted-foreground mb-4 text-foreground"> {/* Ensure description text uses foreground */}
+                                    Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
+                                </p>
+                                <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart
+                                          data={analysisResults} // Use combined results
+                                          margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                                        >
+                                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/> {/* Axis/Tick uses foreground */}
+                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} /> {/* Axis/Tick uses foreground */}
+                                           <RechartsTooltip
+                                                content={
+                                                    <ChartTooltipContent
+                                                        indicator="dot"
+                                                        labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label uses foreground
+                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground" // Ensure tooltip content uses foreground
+                                                    />
+                                                }
+                                                 cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
+                                            />
+                                          <RechartsLegend content={ <ChartLegendContent
+                                              nameKey={parameter.key}
+                                              payload={
+                                                Object.entries(chartConfig)
+                                                  .filter(([key]) => key === parameter.key || key === 'prediction') // Only show current param and prediction legend
+                                                  .map(([key, config]) => ({
+                                                    value: config.label,
+                                                    type: key === 'prediction' ? 'dashed' : 'line',
+                                                    id: key,
+                                                    color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
+                                                    icon: config.icon // Pass icon
+                                                  }))
+                                              }
+                                              className="text-foreground" // Ensure legend text uses foreground
+                                          /> }
+                                          />
+                                          {/* Line for actual data */}
+                                          <Line
+                                            key={`${parameter.key}-actual`} // Add unique key
+                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Use null for prediction points in actual data line
+                                            type="linear"
+                                            stroke="#000000" // Black line
+                                            strokeWidth={2} // Medium width
+                                            dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
+                                            activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
+                                            name={parameter.name}
+                                            isAnimationActive={false}
+                                            connectNulls={false} // Don't connect across nulls
+                                          />
+                                           {/* Line segment specifically for predictions, starting from the last actual point */}
+                                           <Line
+                                                key={`${parameter.key}-prediction`} // Add unique key
+                                                dataKey={(payload: AnalysisResult, index: number) => {
+                                                    // Find the index of the last actual data point
+                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                                                    // Only render this line segment for the prediction points and the very last actual point
+                                                    if (payload.isPrediction || (lastActualIndex !== -1 && index === lastActualIndex -1)) {
+                                                        return payload[parameter.key as keyof AnalysisResult];
+                                                    }
+                                                    return null; // Return null for actual data points before the last one
+                                                }}
+                                                stroke="#000000" // Black line for predictions too
+                                                type="linear"
+                                                strokeWidth={2} // Medium width
+                                                strokeDasharray="5 5" // Dashed line for predictions
+                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
+                                                activeDot={false} // No active dot effect for prediction line segment
+                                                name={`${parameter.name} (Pred.)`}
+                                                isAnimationActive={false}
+                                                connectNulls={true} // Connect prediction points even if separated by nulls
+                                             />
+
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </ChartContainer>
+                             </AccordionContent>
+                         </Card>
+                    </AccordionItem>
+                ))}
+            </Accordion>
         )}
-        {renderChart(temperatureChartData, 'waterTemperature', 'Water Temperature', '#8884d8')}
-        {renderChart(salinityChartData, 'salinity', 'Salinity', '#82ca9d')}
-        {renderChart(pHChartData, 'pHLevel', 'pH Level', '#ffc658')}
-        {renderChart(oxygenChartData, 'dissolvedOxygen', 'Dissolved Oxygen', '#a4de6c')}
-        {renderChart(turbidityChartData, 'turbidity', 'Turbidity', '#d0ed57')}
-        {renderChart(nitrateChartData, 'nitrate', 'Nitrate', '#ff7300')}
-              <Card className="shadow-md rounded-md">
-        <CardHeader>
-          <CardTitle>All Parameters Over Time</CardTitle>
-          <CardDescription>Trends of all parameters over time, including predictions.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={500}>
-            <LineChart data={allChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="waterTemperature" stroke="#8884d8" name="Water Temperature" />
-              <Line type="monotone" dataKey="salinity" stroke="#82ca9d" name="Salinity" />
-              <Line type="monotone" dataKey="pHLevel" stroke="#ffc658" name="pH Level" />
-              <Line type="monotone" dataKey="dissolvedOxygen" stroke="#a4de6c" name="Dissolved Oxygen" />
-              <Line type="monotone" dataKey="turbidity" stroke="#d0ed57" name="Turbidity" />
-              <Line type="monotone" dataKey="nitrate" stroke="#ff7300" name="Nitrate" />
-              <Brush dataKey="time" stroke="#8884d8" />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+
+      {/* Parameter Ranges Table */}
+      {analysisResults.length > 0 && (
+          <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
+            <CardHeader>
+                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle> {/* Title uses foreground */}
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription> {/* Description uses foreground */}
+            </CardHeader>
+            <CardContent className="p-0">
+               <div className="overflow-x-auto">
+               <Table className="min-w-full">
+                    <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
+                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead> {/* Header uses foreground */}
+                            <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
+                            <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
+                            <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                     <TableBody>
+                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                        <TableRow className="border-b-0"> {/* Last row no bottom border */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell> {/* Cell uses foreground */}
+                        </TableRow>
+                    </TableBody>
+                </Table>
+                </div>
+            </CardContent>
+          </Card>
+      )}
+
       </div>
+
+       {/* Footer Section */}
+      <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4"> {/* Footer text remains white/muted */}
+        <p>&copy; {new Date().getFullYear()} CoralGuard by Senath Sethmika. All rights reserved.</p>
+        <p>Data analysis for educational and informational purposes only.</p>
+        <div className="flex justify-center space-x-4 mt-2">
+             <Link href="https://www.linkedin.com/in/senath-sethmika/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-300 transition-colors duration-300">
+                LinkedIn
+            </Link>
+            <Link href="https://web.facebook.com/senath.sethmika/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-300 transition-colors duration-300">
+                 Facebook
+             </Link>
+             <Link href="https://github.com/senath112" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-300 transition-colors duration-300">
+                Github
+            </Link>
+        </div>
+      </footer>
+
     </div>
   );
 }

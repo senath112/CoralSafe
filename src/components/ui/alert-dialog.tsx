@@ -126,6 +126,7 @@ const AlertDialogCancel = React.forwardRef<
 ))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
+// Keep exports for potential future use, but they are not used in page.tsx anymore
 export {
   AlertDialog,
   AlertDialogPortal,
