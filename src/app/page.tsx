@@ -95,8 +95,10 @@ export default function Home() {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
+  const lastProgressRef = useRef<number>(0); // Ref to track last progress value
+  const lastRemainingTimeRef = useRef<string>(''); // Ref to track the last valid remaining time
 
-   useEffect(() => {
+  useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (isLoading && startTime !== null) {
@@ -105,41 +107,59 @@ export default function Home() {
         const elapsed = now - startTime;
         setElapsedTime(elapsed);
 
-        if (analysisProgress > 0 && analysisProgress < 100) {
-          const totalEstimatedTime = elapsed / (analysisProgress / 100);
-          const remainingTimeMs = totalEstimatedTime - elapsed;
-          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
-          const minutes = Math.floor(remainingSeconds / 60);
-          const seconds = remainingSeconds % 60;
-          if (minutes > 0) {
-            setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+        const currentProgress = analysisProgress; // Use state value
+
+        if (currentProgress > 0 && currentProgress < 100) {
+          // Only update estimate if progress has increased
+          if (currentProgress > lastProgressRef.current) {
+            const totalEstimatedTime = elapsed / (currentProgress / 100);
+            const remainingTimeMs = totalEstimatedTime - elapsed;
+            const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            let newRemainingTimeText = '';
+            if (minutes > 0) {
+              newRemainingTimeText = `~${minutes}m ${seconds}s left`;
+            } else {
+              newRemainingTimeText = `~${seconds}s left`;
+            }
+            setRemainingTimeText(newRemainingTimeText);
+            lastRemainingTimeRef.current = newRemainingTimeText; // Store the new valid estimate
           } else {
-            setRemainingTimeText(`~${seconds}s left`);
+            // If progress hasn't increased, keep showing the last valid estimate
+            setRemainingTimeText(lastRemainingTimeRef.current);
           }
-        } else if (analysisProgress === 0) {
+          lastProgressRef.current = currentProgress; // Update last progress ref
+        } else if (currentProgress === 0) {
           setRemainingTimeText('Estimating time...');
-        } else {
+          lastProgressRef.current = 0; // Reset ref at the beginning
+          lastRemainingTimeRef.current = 'Estimating time...'; // Reset ref
+        } else { // Progress is 100
           setRemainingTimeText('Finishing up...');
         }
       }, 1000);
     } else {
       setElapsedTime(0);
-       if (analysisProgress === 100) {
-          setRemainingTimeText('Analysis complete!');
-       } else {
-           setRemainingTimeText('');
-       }
+      if (analysisProgress === 100) {
+        setRemainingTimeText('Analysis complete!');
+      } else {
+        setRemainingTimeText(''); // Clear time text if not loading or analysis incomplete
+      }
+      lastProgressRef.current = 0; // Reset ref when not loading
+      lastRemainingTimeRef.current = ''; // Reset ref
     }
 
+    // Cleanup function
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
+      // Don't reset refs here, they are handled based on loading state changes
     };
-  }, [isLoading, startTime, analysisProgress]);
+  }, [isLoading, startTime, analysisProgress]); // Depend on analysisProgress
 
 
-  const downloadReport = (expandSummary = false, expandActions = false) => {
+  const downloadReport = () => {
     const input = reportRef.current;
     if (!input) {
       toast({
@@ -150,53 +170,54 @@ export default function Home() {
       return;
     }
 
+    // Temporarily force light theme for PDF generation for better contrast
+    const originalTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    document.documentElement.classList.remove('dark');
+
     const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
-      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan'
+      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.bg-gray-200), text, tspan'
     );
 
     elementsToColor.forEach(el => {
         const elClasses = el.classList;
-        const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => elClasses.contains(cls));
+        const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'bg-gray-200'].some(cls => elClasses.contains(cls));
 
         if (!hasBgClass) {
              originalColors.set(el, el.style.fill || el.style.color);
              if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                 el.style.fill = 'black';
+                 el.style.fill = 'black'; // Force black for SVG text elements
                  el.style.color = '';
              } else {
-                 el.style.color = 'black';
+                 el.style.color = 'black'; // Force black for regular elements
                  el.style.fill = '';
              }
         }
     });
 
-    const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
-    const summaryContents = Array.from(input.querySelectorAll<HTMLElement>('[data-summary-content]'));
-    const actionsTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-actions-trigger]'));
-    const actionsContents = Array.from(input.querySelectorAll<HTMLElement>('[data-actions-content]'));
-
-    const originalStates = new Map<Element, string | null>();
-
-    const setState = (elements: Element[], state: 'open' | 'closed') => {
-        elements.forEach(el => {
-            if (!originalStates.has(el)) {
-                originalStates.set(el, el.getAttribute('data-state'));
-            }
-            el.setAttribute('data-state', state);
-        });
-    };
-
-    setState(summaryTriggers, expandSummary ? 'open' : 'closed');
-    setState(summaryContents, expandSummary ? 'open' : 'closed');
-    setState(actionsTriggers, expandActions ? 'open' : 'closed');
-    setState(actionsContents, expandActions ? 'open' : 'closed');
+    // Ensure accordions are expanded for the PDF
+    const accordions = input.querySelectorAll<HTMLElement>('[data-state="closed"]');
+    accordions.forEach(acc => acc.setAttribute('data-state', 'open'));
 
     setTimeout(() => {
         html2canvas(input, {
             scale: 2,
             useCORS: true,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff', // Force white background
+            // Ensure text rendering is consistent
+            onclone: (document) => {
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    body { color: black !important; }
+                    .text-foreground { color: black !important; }
+                    .text-muted-foreground { color: #555 !important; }
+                    .dark\\:text-foreground { color: black !important; } /* Override dark mode text colors */
+                     .dark\\:text-muted-foreground { color: #555 !important; }
+                     .dark\\:bg-slate-900\\/90 { background-color: rgba(255, 255, 255, 0.9) !important; } /* Override dark card bg */
+                    .dark\\:border-cyan-700\\/30 { border-color: rgba(34, 211, 238, 0.3) !important; } /* Override dark border */
+                 `;
+                document.head.appendChild(style);
+             }
         })
         .then((canvas) => {
             const imgData = canvas.toDataURL('image/png');
@@ -208,33 +229,39 @@ export default function Home() {
             let heightLeft = pdfHeight;
             let position = 0;
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            pdf.addImage(imgData, 'PNG', 5, position + 5, pdfWidth - 10, pdfHeight - 10); // Add margins
             heightLeft -= pageHeight;
 
             while (heightLeft > 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
+                position = heightLeft - pdfHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 5, position + 5, pdfWidth - 10, pdfHeight - 10); // Add margins
+                heightLeft -= pageHeight;
             }
 
             pdf.save('coral_safe_report.pdf');
             toast({
-            title: 'Success',
-            description: 'Report downloaded successfully!',
+                title: 'Success',
+                description: 'Report downloaded successfully!',
             });
         })
         .catch((error) => {
             console.error('Error generating PDF:', error);
             toast({
-            title: 'Error',
-            description: 'Failed to generate PDF. Please try again.',
-            variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to generate PDF. Please try again.',
+                variant: 'destructive',
             });
         })
         .finally(() => {
+             // Restore original theme
+            if (originalTheme === 'dark') {
+                 document.documentElement.classList.add('dark');
+            }
+
+             // Restore original colors
             elementsToColor.forEach(el => {
-                 const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
+                 const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'bg-gray-200'].some(cls => el.classList.contains(cls));
                  if (!hasBgClass) {
                      const originalColor = originalColors.get(el);
                      if (originalColor !== undefined) {
@@ -244,6 +271,7 @@ export default function Home() {
                              el.style.color = originalColor;
                          }
                      } else {
+                         // If no original color was stored, reset styles
                          if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                              el.style.fill = '';
                          } else {
@@ -252,16 +280,10 @@ export default function Home() {
                      }
                  }
             });
-
-            originalStates.forEach((state, el) => {
-                if (state) {
-                    el.setAttribute('data-state', state);
-                } else {
-                    el.removeAttribute('data-state');
-                }
-            });
+             // Restore accordion states (optional, might be complex)
+             // For simplicity, we leave them expanded after PDF generation
         });
-    }, 100);
+    }, 100); // Delay to allow rendering changes
   };
 
 
@@ -275,53 +297,122 @@ export default function Home() {
     const header = lines[0].split(',').map(item => item.trim());
     const expectedHeaders = ['Date', 'Location', 'Water_Temperature_C', 'Salinity_PSU', 'pH_Level', 'Dissolved_Oxygen_mg_L', 'Turbidity_NTU', 'Nitrate_mg_L'];
 
-    if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
-        console.warn("CSV header doesn't match expected format. Proceeding, but results might be inaccurate.");
+    // Simple header check - more robust checks might be needed
+    if (header.length !== expectedHeaders.length || !header.every((h, i) => h === expectedHeaders[i])) {
+      // Attempt to find header indices even if order is wrong or names differ slightly
+       const indices: {[key: string]: number} = {
+           date: header.findIndex(h => /date/i.test(h)),
+           location: header.findIndex(h => /location/i.test(h)),
+           waterTemperature: header.findIndex(h => /temp/i.test(h)),
+           salinity: header.findIndex(h => /salinity/i.test(h)),
+           pHLevel: header.findIndex(h => /ph/i.test(h)),
+           dissolvedOxygen: header.findIndex(h => /oxygen/i.test(h)),
+           turbidity: header.findIndex(h => /turbidity/i.test(h)),
+           nitrate: header.findIndex(h => /nitrate/i.test(h)),
+       };
+
+       if (Object.values(indices).some(index => index === -1)) {
+           console.error("CSV header is missing expected columns or format is incorrect. Expected:", expectedHeaders.join(','));
+           toast({
+               title: 'CSV Header Error',
+               description: `CSV header is missing expected columns or format is incorrect. Expected: ${expectedHeaders.join(',')}`,
+               variant: 'destructive',
+           });
+           return []; // Stop parsing if headers are fundamentally wrong
+       }
+
+        console.warn("CSV header doesn't match expected format exactly. Attempting to parse based on found column indices.");
+
+        const parsedEntriesDynamic = lines.slice(1).map((entry, index) => {
+          console.log(`Parsing line ${index + 1}: ${entry}`);
+          const parts = entry.split(',').map(item => item.trim());
+          if (parts.length !== header.length) { // Check against actual header length
+            console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
+            return null;
+          }
+
+          const waterTemperatureNum = parseFloat(parts[indices.waterTemperature]);
+          const salinityNum = parseFloat(parts[indices.salinity]);
+          const pHLevelNum = parseFloat(parts[indices.pHLevel]);
+          const dissolvedOxygenNum = parseFloat(parts[indices.dissolvedOxygen]);
+          const turbidityNum = parseFloat(parts[indices.turbidity]);
+          const nitrateNum = parseFloat(parts[indices.nitrate]);
+
+          if (
+            isNaN(waterTemperatureNum) ||
+            isNaN(salinityNum) ||
+            isNaN(pHLevelNum) ||
+            isNaN(dissolvedOxygenNum) ||
+            isNaN(turbidityNum) ||
+            isNaN(nitrateNum) ||
+            indices.date === -1 || // Ensure date and location were found
+            indices.location === -1
+          ) {
+            console.warn(`Skipping entry with invalid numeric values or missing required columns (line ${index + 2}): ${entry}`);
+            return null;
+          }
+
+          return {
+            time: parts[indices.date],
+            location: parts[indices.location],
+            waterTemperature: waterTemperatureNum,
+            salinity: salinityNum,
+            pHLevel: pHLevelNum,
+            dissolvedOxygen: dissolvedOxygenNum,
+            turbidity: turbidityNum,
+            nitrate: nitrateNum,
+          };
+        }).filter((item): item is SensorData => item !== null);
+         console.log("Parsing completed with dynamic headers. Parsed entries:", parsedEntriesDynamic);
+        return parsedEntriesDynamic;
+
+    } else {
+        // Headers match, proceed with direct indexing
+        const parsedEntries = lines.slice(1).map((entry, index) => {
+          console.log(`Parsing line ${index + 1}: ${entry}`);
+          const parts = entry.split(',').map(item => item.trim());
+          if (parts.length !== expectedHeaders.length) {
+            console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
+            return null;
+          }
+
+          const [date, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
+
+          const waterTemperatureNum = parseFloat(waterTemperature);
+          const salinityNum = parseFloat(salinity);
+          const pHLevelNum = parseFloat(pHLevel);
+          const dissolvedOxygenNum = parseFloat(dissolvedOxygen);
+          const turbidityNum = parseFloat(turbidity);
+          const nitrateNum = parseFloat(nitrate);
+
+          if (
+            isNaN(waterTemperatureNum) ||
+            isNaN(salinityNum) ||
+            isNaN(pHLevelNum) ||
+            isNaN(dissolvedOxygenNum) ||
+            isNaN(turbidityNum) ||
+            isNaN(nitrateNum)
+          ) {
+            console.warn(`Skipping entry with invalid numeric values (line ${index + 2}): ${entry}`);
+            return null;
+          }
+
+          return {
+            time: date,
+            location: location,
+            waterTemperature: waterTemperatureNum,
+            salinity: salinityNum,
+            pHLevel: pHLevelNum,
+            dissolvedOxygen: dissolvedOxygenNum,
+            turbidity: turbidityNum,
+            nitrate: nitrateNum,
+          };
+        }).filter((item): item is SensorData => item !== null);
+        console.log("Parsing completed with exact headers. Parsed entries:", parsedEntries);
+        return parsedEntries;
     }
-
-    const parsedEntries = lines.slice(1).map((entry, index) => {
-      console.log(`Parsing line ${index + 1}: ${entry}`);
-      const parts = entry.split(',').map(item => item.trim());
-      if (parts.length !== expectedHeaders.length) {
-         console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
-        return null;
-      }
-
-      const [date, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
-
-      const waterTemperatureNum = parseFloat(waterTemperature);
-      const salinityNum = parseFloat(salinity);
-      const pHLevelNum = parseFloat(pHLevel);
-      const dissolvedOxygenNum = parseFloat(dissolvedOxygen);
-      const turbidityNum = parseFloat(turbidity);
-      const nitrateNum = parseFloat(nitrate);
-
-      if (
-        isNaN(waterTemperatureNum) ||
-        isNaN(salinityNum) ||
-        isNaN(pHLevelNum) ||
-        isNaN(dissolvedOxygenNum) ||
-        isNaN(turbidityNum) ||
-        isNaN(nitrateNum)
-      ) {
-         console.warn(`Skipping entry with invalid numeric values (line ${index + 2}): ${entry}`);
-        return null;
-      }
-
-      return {
-        time: date,
-        location: location,
-        waterTemperature: waterTemperatureNum,
-        salinity: salinityNum,
-        pHLevel: pHLevelNum,
-        dissolvedOxygen: dissolvedOxygenNum,
-        turbidity: turbidityNum,
-        nitrate: nitrateNum,
-      };
-    }).filter((item): item is SensorData => item !== null);
-    console.log("Parsing completed. Parsed entries:", parsedEntries);
-    return parsedEntries;
   };
+
 
  const analyzeData = async () => {
     console.log("analyzeData function called.");
@@ -402,7 +493,15 @@ export default function Home() {
                          }
                      });
                  if (improvements.length === 0) {
-                    improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
+                    // This case might happen if overall isSuitable is false due to multiple cautions,
+                    // but no single factor crossed the 'threatening' threshold individually in the simplified check.
+                    // Let's add a general note.
+                    const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
+                    if(cautions) {
+                         improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
+                    } else {
+                         improvements = ["Review all parameters to identify the cause of unsuitability."]; // Fallback
+                    }
                  }
             } else if (isSuitable === true) {
                  const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
@@ -411,8 +510,8 @@ export default function Home() {
                  } else {
                      improvements = ["Environment appears ideal, continue monitoring."];
                  }
-            } else {
-                 improvements = [];
+            } else { // isSuitable is null - should not happen with current logic, but good to handle
+                 improvements = ["Analysis inconclusive."];
             }
 
 
@@ -440,7 +539,8 @@ export default function Home() {
                 trainingResult.model,
                 trainingResult.normParams,
                 detailedResults, // Pass the current results array for sequential prediction
-                numPredictions
+                numPredictions,
+                parsedData // Pass original parsed data for time gap calculation
             );
 
             // Combine original analyzed results with new predictions
@@ -473,7 +573,7 @@ export default function Home() {
             description: `An error occurred: ${error.message}. Check console for details.`,
             variant: 'destructive',
         });
-        setAnalysisProgress(0);
+        setAnalysisProgress(0); // Reset progress on error
     } finally {
          // Dispose the normalization parameter tensors AFTER analysis and predictions
          if (normParamsToDispose) {
@@ -484,10 +584,15 @@ export default function Home() {
          }
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
-        setStartTime(null);
-        if (analysisProgress < 100) {
-             setAnalysisProgress(100);
+        setStartTime(null); // Reset start time
+        if (analysisProgress < 100 && analysisProgress > 0) { // If stopped early but not at 0
+             setAnalysisProgress(0); // Reset progress fully if error occurred before completion
+         } else if (analysisProgress === 100) {
+             // Keep progress at 100 on success
          }
+         // Reset refs for next run
+         lastProgressRef.current = 0;
+         lastRemainingTimeRef.current = '';
     }
 };
 
@@ -516,12 +621,14 @@ export default function Home() {
                  <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
+                {/* Corrected placement of the title text */}
+                <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
              </div>
 
+            {/* CardDescription now correctly contains divs instead of nested p tags */}
             <CardDescription className="text-muted-foreground text-sm">
-              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
-              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
+                <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
+                <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -559,7 +666,7 @@ export default function Home() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
                  <Button
-                    onClick={() => downloadReport()}
+                    onClick={downloadReport} // Simplified download, no popup
                     className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
                     size="sm"
                  >
@@ -597,17 +704,20 @@ export default function Home() {
                           suitabilityText = 'Prediction';
                           suitabilityIndexText = '';
                       } else {
-                           const isIdeal = result.isSuitable === true && !analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
-                           const isWarning = result.isSuitable === true && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           // isSuitable being false means at least one factor crossed the 'threatening' threshold.
                            const isThreatening = result.isSuitable === false;
+                           // Check for cautions even if not threatening overall
+                           const hasCautions = !isThreatening && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
+                           const isIdeal = !isThreatening && !hasCautions;
+
 
                            if (isIdeal) {
                                suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
                                suitabilityText = 'Suitable';
-                           } else if (isWarning) {
+                           } else if (hasCautions) {
                                suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
                                suitabilityText = 'Warning';
-                           } else {
+                           } else { // Must be threatening
                                suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
                                suitabilityText = 'Threatening';
                            }
@@ -718,36 +828,41 @@ export default function Home() {
                                               className="text-foreground"
                                           /> }
                                           />
+                                          {/* Actual Data Line */}
                                           <Line
                                             key={`${parameter.key}-actual`}
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]}
                                             type="linear"
-                                            stroke="#000000"
+                                            stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use the parameter's color
                                             strokeWidth={2}
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }}
                                             name={parameter.name}
                                             isAnimationActive={false}
-                                            connectNulls={false}
+                                            connectNulls={false} // Don't connect gaps where actual data might be missing
                                           />
+                                          {/* Prediction Line - Connects last actual point to first prediction */}
                                            <Line
                                                 key={`${parameter.key}-prediction`}
                                                 dataKey={(payload: AnalysisResult, index: number) => {
-                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                                                    if (payload.isPrediction || (lastActualIndex !== -1 && index === lastActualIndex -1)) {
+                                                     // Find the index of the first prediction
+                                                    const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                                                    // Include the point if it's a prediction OR if it's the very last actual data point before predictions start
+                                                    if (payload.isPrediction || (firstPredictionIndex !== -1 && index === firstPredictionIndex -1)) {
+                                                        // Return the value for the current parameter
                                                         return payload[parameter.key as keyof AnalysisResult];
                                                     }
-                                                    return null;
+                                                    return null; // Return null for other actual data points
                                                 }}
-                                                stroke="#000000"
+                                                stroke={chartConfig[parameter.key]?.color || '#8884d8'} // Use parameter color
                                                 type="linear"
                                                 strokeWidth={2}
-                                                strokeDasharray="5 5"
-                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
-                                                activeDot={false}
+                                                strokeDasharray="5 5" // Dashed line for prediction
+                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Match dot color
+                                                activeDot={false} // No active dot for prediction line itself
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
-                                                connectNulls={true}
+                                                connectNulls={true} // Connect the last actual point to the first prediction
                                              />
 
                                         </LineChart>
@@ -845,3 +960,6 @@ export default function Home() {
   );
 }
 
+
+
+    
