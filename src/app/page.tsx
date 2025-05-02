@@ -1,3 +1,4 @@
+
 'use client';
 
 import {useState, useCallback, useRef, useEffect} from 'react';
@@ -13,13 +14,13 @@ import {
   ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-} from '@/components/ui/chart'; // Corrected import path
-import type { ChartConfig } from "@/components/ui/chart"; // Import ChartConfig type
-import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer} from 'recharts'; // Keep Recharts imports if needed for customization
+} from '@/components/ui/chart';
+import type { ChartConfig } from "@/components/ui/chart";
+import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer} from 'recharts';
 import {Progress} from "@/components/ui/progress";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
-import * as tf from '@tensorflow/tfjs';
-import {useToast} from "@/hooks/use-toast"; // Ensure useToast is correctly imported
+import * as tf from '@tensorflow/tfjs'; // Still needed for tf.dispose
+import {useToast} from "@/hooks/use-toast";
 import {
   Table,
   TableHeader,
@@ -28,14 +29,17 @@ import {
   TableRow,
   TableCell,
   TableCaption,
-} from "@/components/ui/table"; // Ensure Table components are imported
+} from "@/components/ui/table";
 import {jsPDF} from 'jspdf';
 import html2canvas from 'html2canvas';
-import Link from 'next/link'; // Import Link for social media icons
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge } from 'lucide-react'; // Import icons
+import Link from 'next/link';
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge } from 'lucide-react';
+// Import functions from the new prediction model file
+import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 
 
-interface AnalysisResult {
+// Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
+export interface SensorData {
   time: string;
   location: string;
   waterTemperature: number;
@@ -44,29 +48,17 @@ interface AnalysisResult {
   dissolvedOxygen: number;
   turbidity: number;
   nitrate: number;
+}
+
+export interface AnalysisResult extends SensorData {
   isSuitable: boolean | null;
   summary?: string;
   improvements?: string[];
   suitabilityIndex?: number;
-  isPrediction?: boolean; // Added to distinguish predictions
+  isPrediction?: boolean;
 }
 
-interface SensorData {
-  time: string;
-  location: string;
-  waterTemperature: number;
-  salinity: number;
-  pHLevel: number;
-  dissolvedOxygen: number;
-  turbidity: number;
-  nitrate: number;
-}
-
-interface NormalizationParams {
-  min: tf.Tensor;
-  max: tf.Tensor;
-}
-
+// Keep thresholds and parameters definition here or move to utils/config
 const sensorDataThresholds = defineSensorDataThresholds();
 
 const parameters = [
@@ -78,34 +70,32 @@ const parameters = [
   {name: 'Nitrate', key: 'nitrate', unit: 'mg/L', icon: Droplet},
 ];
 
-// Chart Configuration
 const chartConfig: ChartConfig = {
   waterTemperature: {label: "Water Temp (°C)", color: "hsl(var(--chart-1))", icon: Thermometer},
   salinity: {label: "Salinity (PSU)", color: "hsl(var(--chart-2))", icon: Waves},
   pHLevel: {label: "pH Level", color: "hsl(var(--chart-3))", icon: Beaker},
   dissolvedOxygen: {label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind},
   turbidity: {label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog},
-  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet}, // Changed color
-  prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>}, // Example prediction style
+  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet},
+  prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>},
 } satisfies ChartConfig;
 
 export default function Home() {
   const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
-  const [model, setModel] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null); // Store model and norm params
+  // Store the trained model and normalization parameters
+  const [trainedModelInfo, setTrainedModelInfo] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const {toast} = useToast();
 
   const csvDataRef = useRef<string>('');
-  const reportRef = useRef<HTMLDivElement>(null); // Ref for the report section
+  const reportRef = useRef<HTMLDivElement>(null);
 
-  // State for time tracking
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
 
-   // Effect for updating time remaining
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
 
@@ -128,31 +118,29 @@ export default function Home() {
           }
         } else if (analysisProgress === 0) {
           setRemainingTimeText('Estimating time...');
-        } else { // Progress is 100 or analysis finished
+        } else {
           setRemainingTimeText('Finishing up...');
         }
-      }, 1000); // Update every second
+      }, 1000);
     } else {
-      setElapsedTime(0); // Reset elapsed time when not loading
+      setElapsedTime(0);
        if (analysisProgress === 100) {
           setRemainingTimeText('Analysis complete!');
        } else {
-           setRemainingTimeText(''); // Clear remaining time text
+           setRemainingTimeText('');
        }
     }
 
-    // Cleanup function to clear the interval
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-  }, [isLoading, startTime, analysisProgress]); // Dependencies
+  }, [isLoading, startTime, analysisProgress]);
 
 
-  // Updated downloadReport to accept expansion options, defaulting to false if not provided
   const downloadReport = (expandSummary = false, expandActions = false) => {
-    const input = reportRef.current; // Use the ref
+    const input = reportRef.current;
     if (!input) {
       toast({
         title: 'Error',
@@ -162,14 +150,12 @@ export default function Home() {
       return;
     }
 
-    // Temporarily set text to black for PDF generation
     const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
-      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan' // Select more elements, exclude colored suitability spans
+      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan'
     );
 
     elementsToColor.forEach(el => {
-        // Ensure the element itself doesn't have a background color class that we want to keep
         const elClasses = el.classList;
         const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => elClasses.contains(cls));
 
@@ -177,16 +163,14 @@ export default function Home() {
              originalColors.set(el, el.style.fill || el.style.color);
              if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                  el.style.fill = 'black';
-                 el.style.color = ''; // Clear color style for SVG text
+                 el.style.color = '';
              } else {
                  el.style.color = 'black';
-                 el.style.fill = ''; // Clear fill style for HTML elements
+                 el.style.fill = '';
              }
         }
     });
 
-
-    // Temporarily expand accordions if requested
     const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
     const summaryContents = Array.from(input.querySelectorAll<HTMLElement>('[data-summary-content]'));
     const actionsTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-actions-trigger]'));
@@ -196,7 +180,6 @@ export default function Home() {
 
     const setState = (elements: Element[], state: 'open' | 'closed') => {
         elements.forEach(el => {
-            // Only store original state if it hasn't been stored already for this element
             if (!originalStates.has(el)) {
                 originalStates.set(el, el.getAttribute('data-state'));
             }
@@ -204,18 +187,16 @@ export default function Home() {
         });
     };
 
-    // Set states based on passed arguments (defaulting to closed)
     setState(summaryTriggers, expandSummary ? 'open' : 'closed');
     setState(summaryContents, expandSummary ? 'open' : 'closed');
     setState(actionsTriggers, expandActions ? 'open' : 'closed');
     setState(actionsContents, expandActions ? 'open' : 'closed');
 
-    // Force redraw/reflow before html2canvas - small timeout
     setTimeout(() => {
         html2canvas(input, {
             scale: 2,
             useCORS: true,
-            backgroundColor: '#ffffff' // Ensure a white background for the PDF
+            backgroundColor: '#ffffff'
         })
         .then((canvas) => {
             const imgData = canvas.toDataURL('image/png');
@@ -252,7 +233,6 @@ export default function Home() {
             });
         })
         .finally(() => {
-            // Restore original colors
             elementsToColor.forEach(el => {
                  const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
                  if (!hasBgClass) {
@@ -265,16 +245,14 @@ export default function Home() {
                          }
                      } else {
                          if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                             el.style.fill = ''; // Reset to default
+                             el.style.fill = '';
                          } else {
-                             el.style.color = ''; // Reset to default
+                             el.style.color = '';
                          }
                      }
                  }
             });
 
-
-            // Restore original accordion states
             originalStates.forEach((state, el) => {
                 if (state) {
                     el.setAttribute('data-state', state);
@@ -283,13 +261,12 @@ export default function Home() {
                 }
             });
         });
-    }, 100); // Small delay for rendering changes
+    }, 100);
   };
 
 
   const parseData = (data: string): SensorData[] => {
     console.log("Parsing data...");
-    // Splitting by newline to separate entries
     const lines = data.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     if (lines.length < 2) {
         console.warn("No data rows found after header.");
@@ -298,24 +275,20 @@ export default function Home() {
     const header = lines[0].split(',').map(item => item.trim());
     const expectedHeaders = ['Date', 'Location', 'Water_Temperature_C', 'Salinity_PSU', 'pH_Level', 'Dissolved_Oxygen_mg_L', 'Turbidity_NTU', 'Nitrate_mg_L'];
 
-    // Basic header check
     if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
         console.warn("CSV header doesn't match expected format. Proceeding, but results might be inaccurate.");
-        // You could throw an error here if strict format is required
-        // toast({ title: "Warning", description: "CSV header doesn't match expected format. Results might be inaccurate.", variant: "destructive" });
     }
 
-    const parsedEntries = lines.slice(1).map((entry, index) => { // Skip the header row
+    const parsedEntries = lines.slice(1).map((entry, index) => {
       console.log(`Parsing line ${index + 1}: ${entry}`);
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== expectedHeaders.length) {
          console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
-        return null; // Skip incomplete entries
+        return null;
       }
 
       const [date, location, waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate] = parts;
 
-      // Convert to appropriate types
       const waterTemperatureNum = parseFloat(waterTemperature);
       const salinityNum = parseFloat(salinity);
       const pHLevelNum = parseFloat(pHLevel);
@@ -323,7 +296,6 @@ export default function Home() {
       const turbidityNum = parseFloat(turbidity);
       const nitrateNum = parseFloat(nitrate);
 
-      // Validate numeric conversions
       if (
         isNaN(waterTemperatureNum) ||
         isNaN(salinityNum) ||
@@ -346,112 +318,10 @@ export default function Home() {
         turbidity: turbidityNum,
         nitrate: nitrateNum,
       };
-    }).filter((item): item is SensorData => item !== null); // Type guard to filter out nulls
+    }).filter((item): item is SensorData => item !== null);
     console.log("Parsing completed. Parsed entries:", parsedEntries);
     return parsedEntries;
   };
-
-  // Function to normalize data using Min-Max scaling
-  const normalizeData = (tensor: tf.Tensor): { normalized: tf.Tensor; normParams: NormalizationParams } => {
-    const min = tensor.min(0);
-    const max = tensor.max(0);
-    // Add a small epsilon to prevent division by zero if min and max are the same
-    const range = max.sub(min).add(tf.scalar(1e-7));
-    const normalized = tensor.sub(min).div(range);
-    return { normalized, normParams: { min, max } };
-  };
-
-  // Function to denormalize data
-  const denormalizeData = (tensor: tf.Tensor, normParams: NormalizationParams): tf.Tensor => {
-    const range = normParams.max.sub(normParams.min).add(tf.scalar(1e-7));
-    return tensor.mul(range).add(normParams.min);
-  };
-
-  const trainModel = async (data: SensorData[]): Promise<{ model: tf.Sequential; normParams: NormalizationParams } | null> => {
-    console.log("Starting model training...");
-    if (data.length < 2) { // Need at least 2 data points to determine range for normalization
-      console.log("Not enough data to train on. Skipping model training.");
-      toast({
-            title: "Training Skipped",
-            description: "Need at least 2 data points for model training and prediction.",
-            variant: "destructive",
-      });
-      return null;
-    }
-
-    const numFeatures = 6; // waterTemperature, salinity, pHLevel, dissolvedOxygen, turbidity, nitrate
-
-    // Prepare data for TensorFlow.js
-    const features = data.map(item => [
-        item.waterTemperature,
-        item.salinity,
-        item.pHLevel,
-        item.dissolvedOxygen,
-        item.turbidity,
-        item.nitrate
-    ]);
-    console.log("Prepared features for training:", features);
-
-    let inputTensor: tf.Tensor2D | null = null;
-    let normalizedTensor: tf.Tensor2D | null = null;
-    let normParams: NormalizationParams | null = null;
-
-    try {
-        inputTensor = tf.tensor2d(features); // Shape: [numRecords, numFeatures]
-        console.log("Created input tensor:", inputTensor.shape);
-
-        // Normalize the data
-        const normResult = normalizeData(inputTensor);
-        normalizedTensor = normResult.normalized as tf.Tensor2D;
-        normParams = normResult.normParams;
-        console.log("Normalized input tensor:", normalizedTensor.shape);
-        console.log("Normalization params (min):", await normParams.min.data());
-        console.log("Normalization params (max):", await normParams.max.data());
-
-        // Define a simple sequential model
-        const model = tf.sequential();
-        model.add(tf.layers.dense({units: 64, activation: 'relu', inputShape: [numFeatures]}));
-        model.add(tf.layers.dense({units: 32, activation: 'relu'}));
-        model.add(tf.layers.dense({units: numFeatures})); // Output layer with numFeatures units
-        console.log("Defined model architecture.");
-
-        // Compile the model
-        model.compile({optimizer: 'adam', loss: 'meanSquaredError'});
-        console.log("Compiled model.");
-
-        // Train the model on NORMALIZED data
-        console.log("Starting model fitting...");
-        await model.fit(normalizedTensor, normalizedTensor, {
-            epochs: 150, // Increased epochs slightly
-            batchSize: Math.max(1, Math.floor(data.length / 10)), // Dynamic batch size
-            shuffle: true,
-            callbacks: {
-                onEpochEnd: (epoch, logs) => {
-                     console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
-                }
-            }
-        });
-        console.log("Model training completed successfully.");
-        // Return the model AND normalization parameters
-        // Important: normParams must not be null here
-        return { model, normParams: normParams! };
-    } catch (error) {
-        console.error("Error during model training:", error);
-        toast({
-            title: "Model Training Error",
-            description: "An error occurred while training the prediction model.",
-            variant: "destructive",
-        });
-        return null;
-    } finally {
-         // Ensure tensors are disposed even if errors occur
-        if (inputTensor) tf.dispose(inputTensor);
-        if (normalizedTensor) tf.dispose(normalizedTensor);
-        // normParams tensors (min/max) are needed later, DO NOT dispose here
-        console.log("Disposed training tensors (input, normalized). Kept normalization params.");
-    }
-  };
-
 
  const analyzeData = async () => {
     console.log("analyzeData function called.");
@@ -468,10 +338,14 @@ export default function Home() {
 
     setIsLoading(true);
     setAnalysisProgress(0);
-    setAnalysisResults([]); // Clear previous results
-    setStartTime(Date.now()); // Record start time
-    console.log("Set loading state to true, cleared previous results, recorded start time.");
-    csvDataRef.current = sensorData; // Store raw CSV data if needed
+    setAnalysisResults([]);
+    setStartTime(Date.now());
+    setTrainedModelInfo(null); // Clear previous model
+    console.log("Set loading state, cleared previous results/model, recorded start time.");
+    csvDataRef.current = sensorData;
+
+    let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
+    let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
 
     try {
         console.log("Parsing sensor data...");
@@ -486,19 +360,22 @@ export default function Home() {
                 variant: 'destructive',
             });
             setIsLoading(false);
-            setStartTime(null); // Reset start time on error
+            setStartTime(null);
             return;
         }
 
-        // Train the model first
-        console.log("Training model...");
-        setAnalysisProgress(10); // Start progress
-        const trainingResult = await trainModel(parsedData);
-        setModel(trainingResult); // Save the trained model and norm params
+        // --- Train Model ---
+        console.log("Training model using prediction-model.ts...");
+        setAnalysisProgress(10);
+        trainingResult = await trainPredictionModel(parsedData);
+        setTrainedModelInfo(trainingResult); // Save the trained model and norm params
+        if (trainingResult) {
+            normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
+        }
         console.log("Model training finished. Training result:", trainingResult);
-        setAnalysisProgress(30); // Progress after training
+        setAnalysisProgress(30);
 
-        // Process each data point for suitability analysis
+        // --- Analyze Data Points ---
         console.log("Analyzing each data point for suitability...");
         let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
             console.log(`Analyzing data point ${index}:`, data);
@@ -509,30 +386,25 @@ export default function Home() {
             const suitabilityIndex = calculateSuitabilityIndex(data, sensorDataThresholds);
              console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
 
-            let improvements: string[] = [];
-             if (isSuitable === false) { // Check explicitly for false, as null means prediction
-                 console.log(`Generating improvements for unsuitable point ${index}`);
+             let improvements: string[] = [];
+             if (isSuitable === false) {
                  improvements = Object.entries(threateningFactors)
-                 .filter(([_, value]) => value) // Filter only true (threatening) factors
-                 .map(([key]) => {
-                     switch(key) {
-                         case 'temperature': return "Address high/low water temperature issues.";
-                         case 'salinity': return "Investigate and mitigate salinity fluctuations.";
-                         case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
-                         case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
-                         case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
-                         case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
-                         default: return `Address issues related to ${key}.`;
-                     }
-                 });
+                     .filter(([_, value]) => value)
+                     .map(([key]) => {
+                         switch(key) {
+                             case 'temperature': return "Address high/low water temperature issues.";
+                             case 'salinity': return "Investigate and mitigate salinity fluctuations.";
+                             case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
+                             case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
+                             case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
+                             case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
+                             default: return `Address issues related to ${key}.`;
+                         }
+                     });
                  if (improvements.length === 0) {
-                    // If marked unsuitable but no specific factor crossed the 'threatening' line,
-                    // it means multiple factors are likely in the 'caution' zone.
                     improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
                  }
-                 console.log(`Improvements for point ${index}:`, improvements);
             } else if (isSuitable === true) {
-                 // Check if there are any caution factors even if overall suitable
                  const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
                  if (cautions) {
                      improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
@@ -540,11 +412,10 @@ export default function Home() {
                      improvements = ["Environment appears ideal, continue monitoring."];
                  }
             } else {
-                 improvements = []; // No improvements for predictions (isSuitable is null)
+                 improvements = [];
             }
 
 
-            // Update progress during analysis phase (30% to 60%)
             const currentProgress = 30 + ((index + 1) / parsedData.length) * 30;
             setAnalysisProgress(currentProgress);
             console.log(`Analysis progress: ${currentProgress.toFixed(0)}%`);
@@ -560,107 +431,31 @@ export default function Home() {
         });
         console.log("Finished suitability analysis for all data points.");
 
-        // Perform predictions only if the model was trained successfully
+        // --- Generate Predictions ---
         if (trainingResult) {
-            console.log("Starting predictions...");
-            const { model: trainedModel, normParams } = trainingResult;
+            console.log("Generating predictions using prediction-model.ts...");
             const numPredictions = 5;
-            // IMPORTANT: Make a deep copy for iterative prediction
-             let currentInputDataArray: AnalysisResult[] = JSON.parse(JSON.stringify(detailedResults));
-             let predictedResults: AnalysisResult[] = [];
+            // Pass the model, normParams, and the already analyzed results
+            const predictedResults = await generatePredictions(
+                trainingResult.model,
+                trainingResult.normParams,
+                detailedResults, // Pass the current results array for sequential prediction
+                numPredictions
+            );
 
-            for (let i = 0; i < numPredictions; i++) {
-                 console.log(`Predicting step P${i + 1}`);
-                 // Prepare input tensor from the *last* element of the current data array
-                 const lastKnownData = currentInputDataArray[currentInputDataArray.length - 1];
-                 const featuresToPredict = [
-                    lastKnownData.waterTemperature,
-                    lastKnownData.salinity,
-                    lastKnownData.pHLevel,
-                    lastKnownData.dissolvedOxygen,
-                    lastKnownData.turbidity,
-                    lastKnownData.nitrate,
-                 ];
-                 let inputTensorRaw: tf.Tensor2D | null = null;
-                 let inputTensorNormalized: tf.Tensor2D | null = null;
-                 let predictionTensorNormalized: tf.Tensor<tf.Rank.R2> | null = null;
-                 let predictionTensorDenormalized: tf.Tensor<tf.Rank.R2> | null = null;
-
-                 try {
-                     inputTensorRaw = tf.tensor2d([featuresToPredict]); // Shape: [1, numFeatures]
-                     console.log(`Raw input for prediction P${i + 1}:`, featuresToPredict);
-
-                     // Normalize the input for prediction using the saved normParams
-                     inputTensorNormalized = inputTensorRaw.sub(normParams.min).div(normParams.max.sub(normParams.min).add(tf.scalar(1e-7))) as tf.Tensor2D;
-                     console.log(`Normalized input for prediction P${i + 1}:`, await inputTensorNormalized.data());
-
-                    // Generate prediction (output will be normalized)
-                     predictionTensorNormalized = trainedModel.predict(inputTensorNormalized) as tf.Tensor<tf.Rank.R2>;
-                     console.log(`Normalized prediction P${i + 1}:`, await predictionTensorNormalized.data());
-
-                     // De-normalize the prediction
-                     predictionTensorDenormalized = denormalizeData(predictionTensorNormalized, normParams);
-                     const predictedValuesRaw = await predictionTensorDenormalized.data();
-                     console.log(`De-normalized predicted values for P${i + 1}:`, predictedValuesRaw);
-
-                     // Add slight random variations for realism AFTER de-normalization
-                    const predictedResult: AnalysisResult = {
-                        time: `P${i + 1}`,
-                        location: lastKnownData.location, // Assume same location
-                        // Apply variations to de-normalized values, ensuring non-negative results
-                        waterTemperature: Math.max(0, predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1),
-                        salinity: Math.max(0, predictedValuesRaw[1] + (Math.random() - 0.5) * 0.1),
-                        pHLevel: Math.max(7, Math.min(9, predictedValuesRaw[2] + (Math.random() - 0.5) * 0.01)), // Constrain pH
-                        dissolvedOxygen: Math.max(0, predictedValuesRaw[3] + (Math.random() - 0.5) * 0.1),
-                        turbidity: Math.max(0, predictedValuesRaw[4] + (Math.random() - 0.5) * 0.05),
-                        nitrate: Math.max(0, predictedValuesRaw[5] + (Math.random() - 0.5) * 0.01),
-                        isSuitable: null, // Suitability is not determined for predictions
-                        summary: 'Prediction',
-                        improvements: [],
-                        suitabilityIndex: undefined, // No suitability index for predictions
-                        isPrediction: true,
-                    };
-                     console.log(`Formatted prediction result P${i + 1}:`, predictedResult);
-
-                    predictedResults.push(predictedResult);
-
-                     // Add this prediction to the array for the next prediction step's input
-                     // **Crucially, use the predicted data for the next prediction**
-                     currentInputDataArray.push(predictedResult);
-
-                 } finally {
-                    // Dispose tensors used in this prediction step
-                    if (inputTensorRaw) tf.dispose(inputTensorRaw);
-                    if (inputTensorNormalized) tf.dispose(inputTensorNormalized);
-                    if (predictionTensorNormalized) tf.dispose(predictionTensorNormalized);
-                    if (predictionTensorDenormalized) tf.dispose(predictionTensorDenormalized);
-                    console.log(`Disposed tensors for prediction P${i + 1}`);
-                 }
-
-                // Update progress during prediction phase (60% to 100%)
-                const predictionProgress = 60 + ((i + 1) / numPredictions) * 40;
-                setAnalysisProgress(predictionProgress);
-                console.log(`Prediction progress: ${predictionProgress.toFixed(0)}%`);
-            }
-            // Dispose the normalization parameter tensors after all predictions are done
-             if (normParams) {
-                tf.dispose([normParams.min, normParams.max]);
-                console.log("Disposed normalization parameter tensors.");
-             } else {
-                 console.warn("Normalization parameters were null, cannot dispose.");
-             }
-
-             // Combine original analyzed results with new predictions
+            // Combine original analyzed results with new predictions
              detailedResults = [...detailedResults, ...predictedResults];
 
+             // Update progress after predictions (assuming predictions take up the remaining 40%)
+            setAnalysisProgress(100);
             console.log("Finished predictions.");
         } else {
              console.log("Model training failed or skipped. No predictions will be made.");
-             setAnalysisProgress(100); // If no model, progress is complete after analysis
+             setAnalysisProgress(100);
              toast({
                  title: "Prediction Skipped",
                  description: "Model training failed or was skipped, so predictions could not be made.",
-                 variant: "destructive", // Or "default" if just informational
+                 variant: "destructive",
              });
         }
 
@@ -678,13 +473,19 @@ export default function Home() {
             description: `An error occurred: ${error.message}. Check console for details.`,
             variant: 'destructive',
         });
-        setAnalysisProgress(0); // Reset progress on error
+        setAnalysisProgress(0);
     } finally {
+         // Dispose the normalization parameter tensors AFTER analysis and predictions
+         if (normParamsToDispose) {
+            tf.dispose([normParamsToDispose.min, normParamsToDispose.max]);
+            console.log("Disposed normalization parameter tensors.");
+         } else {
+             console.warn("Normalization parameters were null or model training failed, cannot dispose.");
+         }
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
-        setStartTime(null); // Reset start time when done or on error
-        // Ensure progress completes if successful or if it stopped partway
-        if (analysisProgress < 100) { // Check if progress needs setting to 100
+        setStartTime(null);
+        if (analysisProgress < 100) {
              setAnalysisProgress(100);
          }
     }
@@ -692,10 +493,10 @@ export default function Home() {
 
 
   return (
-    <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground"> {/* Added text-foreground */}
+    <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
 
       {/* Header Section */}
-      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm"> {/* Header text remains white */}
+      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm">
          <div className="flex items-center justify-center mb-2">
             <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
             <h1 className="text-4xl font-bold">CoralGuard</h1>
@@ -708,19 +509,19 @@ export default function Home() {
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
-        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30"> {/* Card text uses foreground */}
+        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
            <CardHeader>
              <div className="flex items-center mb-4">
                <Avatar>
                  <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle> {/* Use CardTitle instead of p */}
+               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
              </div>
 
-            <CardDescription className="text-muted-foreground text-sm"> {/* Description uses muted foreground */}
-              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div> {/* Use div instead of p */}
-              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div> {/* Use div instead of p */}
+            <CardDescription className="text-muted-foreground text-sm">
+              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
+              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -731,10 +532,10 @@ export default function Home() {
                 console.log("Sensor data changed:", e.target.value);
                 setSensorData(e.target.value);
               }}
-              className="min-h-[150px] text-sm p-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" // Ensure textarea text is visible
+              className="min-h-[150px] text-sm p-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
             <Button
-              onClick={analyzeData} // Correctly bind the function
+              onClick={analyzeData}
               disabled={isLoading || !sensorData.trim()}
               className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
             >
@@ -743,9 +544,9 @@ export default function Home() {
              {isLoading && (
                  <div className="w-full px-4 mt-4">
                      <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-foreground mt-2"> {/* Changed text color to text-foreground */}
+                     <p className="text-center text-sm text-foreground mt-2">
                         Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
-                     </p> {/* Added percentage and time remaining */}
+                     </p>
                  </div>
              )}
           </CardContent>
@@ -756,10 +557,9 @@ export default function Home() {
       {analysisResults.length > 0 && (
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle> {/* Title uses foreground */}
-                 {/* Simple Download Button - No Dialog */}
+                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
                  <Button
-                    onClick={() => downloadReport()} // Call directly, default is accordions closed
+                    onClick={() => downloadReport()}
                     className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
                     size="sm"
                  >
@@ -771,44 +571,44 @@ export default function Home() {
               <Table className="min-w-full">
                 <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                   <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead> {/* Header uses foreground */}
-                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead> {/* Header uses foreground */}
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead>
+                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead>
+                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead>
+                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => {
-                      const isPrediction = result.isSuitable === null; // Check if it's a prediction
+                      const isPrediction = result.isSuitable === null;
                       let suitabilityClass = '';
                       let suitabilityText = '';
                       let suitabilityIndexText = result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : '';
 
 
                       if (isPrediction) {
-                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'; // Prediction text color adapts
+                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
                           suitabilityText = 'Prediction';
-                          suitabilityIndexText = ''; // No index for predictions
+                          suitabilityIndexText = '';
                       } else {
                            const isIdeal = result.isSuitable === true && !analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
                            const isWarning = result.isSuitable === true && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
                            const isThreatening = result.isSuitable === false;
 
                            if (isIdeal) {
-                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200'; // Specific color for ideal
+                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
                                suitabilityText = 'Suitable';
                            } else if (isWarning) {
-                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200'; // Specific color for warning
+                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
                                suitabilityText = 'Warning';
-                           } else { // Must be Threatening
-                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200'; // Specific color for threatening
+                           } else {
+                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
                                suitabilityText = 'Threatening';
                            }
                        }
@@ -816,24 +616,24 @@ export default function Home() {
 
                     return (
                       <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell>
+                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell>
                         <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
                                 {suitabilityText} {suitabilityIndexText}
                             </span>
                         </TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell> {/* Cell uses foreground */}
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell> {/* Cell uses foreground */}
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell>
+                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell>
                          <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value={`summary-${index}`} className="border-b-0">
-                                <AccordionTrigger data-summary-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger> {/* Trigger uses foreground */}
-                                <AccordionContent data-summary-content className="text-xs pt-1 pb-2 text-muted-foreground"> {/* Content uses muted foreground */}
+                                <AccordionTrigger data-summary-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger>
+                                <AccordionContent data-summary-content className="text-xs pt-1 pb-2 text-muted-foreground">
                                   {result.summary || 'N/A'}
                                 </AccordionContent>
                               </AccordionItem>
@@ -842,9 +642,9 @@ export default function Home() {
                          <TableCell className="py-2 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value={`actions-${index}`} className="border-b-0">
-                                <AccordionTrigger data-actions-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger> {/* Trigger uses foreground */}
+                                <AccordionTrigger data-actions-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger>
                                 <AccordionContent data-actions-content>
-                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground"> {/* Content uses muted foreground */}
+                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
                                        {result.improvements && result.improvements.length > 0 ? (
                                            result.improvements.map((improvement, i) => (
                                                <li key={i}>{improvement}</li>
@@ -872,33 +672,32 @@ export default function Home() {
             <Accordion type="multiple" className="w-full space-y-4">
                 {parameters.map((parameter) => (
                      <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
-                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
-                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground"> {/* Trigger uses foreground */}
+                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
                                 <div className="flex items-center">
                                     <parameter.icon className="w-5 h-5 mr-2 text-cyan-500"/>
                                     {parameter.name} Trends
                                 </div>
-                                {/* Chevron is automatically added by AccordionTrigger */}
                             </AccordionTrigger>
                              <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
-                                <p className="text-sm text-muted-foreground mb-4 text-foreground"> {/* Ensure description text uses foreground */}
+                                <p className="text-sm text-muted-foreground mb-4 text-foreground">
                                     Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
                                 </p>
                                 <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart
-                                          data={analysisResults} // Use combined results
+                                          data={analysisResults}
                                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                                         >
                                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/> {/* Axis/Tick uses foreground */}
-                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} /> {/* Axis/Tick uses foreground */}
+                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/>
+                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
                                            <RechartsTooltip
                                                 content={
                                                     <ChartTooltipContent
                                                         indicator="dot"
-                                                        labelClassName="text-sm font-medium text-foreground" // Ensure tooltip label uses foreground
-                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground" // Ensure tooltip content uses foreground
+                                                        labelClassName="text-sm font-medium text-foreground"
+                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
                                                     />
                                                 }
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
@@ -907,52 +706,48 @@ export default function Home() {
                                               nameKey={parameter.key}
                                               payload={
                                                 Object.entries(chartConfig)
-                                                  .filter(([key]) => key === parameter.key || key === 'prediction') // Only show current param and prediction legend
+                                                  .filter(([key]) => key === parameter.key || key === 'prediction')
                                                   .map(([key, config]) => ({
                                                     value: config.label,
                                                     type: key === 'prediction' ? 'dashed' : 'line',
                                                     id: key,
-                                                    color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color, // Use correct colors
-                                                    icon: config.icon // Pass icon
+                                                    color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color,
+                                                    icon: config.icon
                                                   }))
                                               }
-                                              className="text-foreground" // Ensure legend text uses foreground
+                                              className="text-foreground"
                                           /> }
                                           />
-                                          {/* Line for actual data */}
                                           <Line
-                                            key={`${parameter.key}-actual`} // Add unique key
-                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]} // Use null for prediction points in actual data line
+                                            key={`${parameter.key}-actual`}
+                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]}
                                             type="linear"
-                                            stroke="#000000" // Black line
-                                            strokeWidth={2} // Medium width
-                                            dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure dots are colored
-                                            activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }} // Ensure active dot is colored
+                                            stroke="#000000"
+                                            strokeWidth={2}
+                                            dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
+                                            activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }}
                                             name={parameter.name}
                                             isAnimationActive={false}
-                                            connectNulls={false} // Don't connect across nulls
+                                            connectNulls={false}
                                           />
-                                           {/* Line segment specifically for predictions, starting from the last actual point */}
                                            <Line
-                                                key={`${parameter.key}-prediction`} // Add unique key
+                                                key={`${parameter.key}-prediction`}
                                                 dataKey={(payload: AnalysisResult, index: number) => {
-                                                    // Find the index of the last actual data point
                                                     const lastActualIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                                                    // Only render this line segment for the prediction points and the very last actual point
                                                     if (payload.isPrediction || (lastActualIndex !== -1 && index === lastActualIndex -1)) {
                                                         return payload[parameter.key as keyof AnalysisResult];
                                                     }
-                                                    return null; // Return null for actual data points before the last one
+                                                    return null;
                                                 }}
-                                                stroke="#000000" // Black line for predictions too
+                                                stroke="#000000"
                                                 type="linear"
-                                                strokeWidth={2} // Medium width
-                                                strokeDasharray="5 5" // Dashed line for predictions
-                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }} // Ensure prediction dots are colored
-                                                activeDot={false} // No active dot effect for prediction line segment
+                                                strokeWidth={2}
+                                                strokeDasharray="5 5"
+                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
+                                                activeDot={false}
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
-                                                connectNulls={true} // Connect prediction points even if separated by nulls
+                                                connectNulls={true}
                                              />
 
                                         </LineChart>
@@ -967,17 +762,17 @@ export default function Home() {
 
       {/* Parameter Ranges Table */}
       {analysisResults.length > 0 && (
-          <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden"> {/* Card text uses foreground */}
+          <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle> {/* Title uses foreground */}
-                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription> {/* Description uses foreground */}
+                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
                <div className="overflow-x-auto">
                <Table className="min-w-full">
                     <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead> {/* Header uses foreground */}
+                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
                             <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
@@ -985,40 +780,40 @@ export default function Home() {
                     </TableHeader>
                      <TableBody>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell>
                         </TableRow>
                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell>
                         </TableRow>
                          <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell> {/* Cell uses foreground */}
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell>
                         </TableRow>
-                        <TableRow className="border-b-0"> {/* Last row no bottom border */}
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell> {/* Cell uses foreground */}
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell> {/* Cell uses foreground */}
+                        <TableRow className="border-b-0">
+                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell>
+                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell>
+                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>
@@ -1030,7 +825,7 @@ export default function Home() {
       </div>
 
        {/* Footer Section */}
-      <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4"> {/* Footer text remains white/muted */}
+      <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4">
         <p>&copy; {new Date().getFullYear()} CoralGuard by Senath Sethmika. All rights reserved.</p>
         <p>Data analysis for educational and informational purposes only.</p>
         <div className="flex justify-center space-x-4 mt-2">
@@ -1049,3 +844,4 @@ export default function Home() {
     </div>
   );
 }
+
