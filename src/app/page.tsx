@@ -183,18 +183,28 @@ export default function Home() {
 
             let remainingTimeMs = -1; // -1 indicates insufficient data or completion
 
-            if (analysisProgress > 0 && analysisProgress < 100 && progressRef.current.length > 1) {
-                const firstPoint = progressRef.current[0];
-                const lastPoint = progressRef.current[progressRef.current.length - 1];
-                const progressDelta = lastPoint.progress - firstPoint.progress;
-                const timeDelta = lastPoint.time - firstPoint.time;
+             if (analysisProgress > 0 && analysisProgress < 100 && progressRef.current.length > 1) {
+                 const firstPoint = progressRef.current[0];
+                 const lastPoint = progressRef.current[progressRef.current.length - 1];
+                 const progressDelta = lastPoint.progress - firstPoint.progress;
+                 const timeDelta = lastPoint.time - firstPoint.time;
 
-                if (progressDelta > 0 && timeDelta > 0) {
-                    const progressRate = progressDelta / timeDelta; // progress per millisecond
-                    const remainingProgress = 100 - analysisProgress;
-                    remainingTimeMs = remainingProgress / progressRate;
-                }
-            }
+                 if (progressDelta > 0 && timeDelta > 0) {
+                     // Avoid division by zero and unstable rates near start
+                     const progressRate = progressDelta / timeDelta; // progress per millisecond
+                     const remainingProgress = 100 - analysisProgress;
+                     remainingTimeMs = remainingProgress / progressRate;
+                 }
+             }
+
+             // Smoothing the remaining time estimate
+             const previousEstimate = remainingTimeRef.current;
+             const alpha = 0.1; // Smoothing factor (0 < alpha <= 1)
+             if (remainingTimeMs > 0 && previousEstimate !== null) {
+                 remainingTimeMs = alpha * remainingTimeMs + (1 - alpha) * previousEstimate;
+             }
+             remainingTimeRef.current = remainingTimeMs > 0 ? remainingTimeMs : null;
+
 
             if (remainingTimeMs > 0) {
                 const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
@@ -224,6 +234,7 @@ export default function Home() {
     } else {
         setElapsedTime(0);
         progressRef.current = []; // Clear history when not loading
+        remainingTimeRef.current = null; // Clear estimate when not loading
         if (analysisProgress === 100 && !isLoading) {
             setRemainingTimeText('Analysis complete!');
         } else {
@@ -237,6 +248,9 @@ export default function Home() {
         }
     };
   }, [isLoading, startTime, analysisProgress]); // analysisProgress is crucial here
+
+  // Ref to store the previous remaining time estimate for smoothing
+  const remainingTimeRef = useRef<number | null>(null);
 
 
   const downloadReport = () => {
@@ -488,6 +502,7 @@ export default function Home() {
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
     setIdentifiedLocationName(null); // Clear previous location name
+    remainingTimeRef.current = null; // Clear remaining time estimate
     setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
@@ -1301,8 +1316,8 @@ export default function Home() {
 
       {/* Footer Section */}
       <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4">
-        <p>&copy; {new Date().getFullYear()} CoralGuard by Senath Sethmika. All rights reserved.</p>
-        <p>Data analysis for educational and informational purposes only.</p>
+         <p>© 2025 CoralGuard by Senath Sethmika. All rights reserved.</p>
+         <p>Data analysis for educational and scientific purposes only.</p>
          <div className="flex justify-center space-x-4 mt-2">
              <Link href="https://www.linkedin.com/in/senath-sethmika/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-300 transition-colors duration-300">
                 LinkedIn
@@ -1319,5 +1334,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 
