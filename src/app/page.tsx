@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,7 +16,7 @@ import {
   ChartLegendContent,
 } from '@/components/ui/chart';
 import type { ChartConfig } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs'; // Still needed for tf.dispose
@@ -34,7 +33,7 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin, TrendingUp } from 'lucide-react'; // Added TrendingUp
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin, TrendingUp, BarChartBig } from 'lucide-react'; // Added TrendingUp, BarChartBig
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
@@ -88,6 +87,53 @@ const chartConfig: ChartConfig = {
   suitabilityIndex: { label: "Suitability Index", color: "hsl(var(--primary))", icon: TrendingUp }, // Added Suitability Index
   prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
 } satisfies ChartConfig;
+
+// --- Helper function to generate gradient definitions ---
+const renderGradientDefs = (config: ChartConfig, parameters: { key: string }[]) => {
+  const gradientIds = new Set<string>(); // Track generated IDs to avoid duplicates
+
+  const suitabilityGradientId = 'suitabilityGradient';
+  const predictionGradientId = 'predictionGradient';
+
+  gradientIds.add(suitabilityGradientId);
+  gradientIds.add(predictionGradientId);
+
+  parameters.forEach(param => {
+    gradientIds.add(`${param.key}Gradient`);
+  });
+
+  return (
+    <svg style={{ height: 0, width: 0, position: 'absolute' }}>
+      <defs>
+        {/* Suitability Gradient */}
+        <linearGradient id={suitabilityGradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={config.suitabilityIndex?.color || 'hsl(var(--primary))'} stopOpacity={0.8} />
+          <stop offset="95%" stopColor={config.suitabilityIndex?.color || 'hsl(var(--primary))'} stopOpacity={0.2} />
+        </linearGradient>
+
+        {/* Prediction Gradient */}
+        <linearGradient id={predictionGradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={config.prediction.color} stopOpacity={0.7} />
+          <stop offset="95%" stopColor={config.prediction.color} stopOpacity={0.1} />
+        </linearGradient>
+
+        {/* Parameter Gradients */}
+        {parameters.map((parameter) => {
+          const paramConfig = config[parameter.key];
+          if (!paramConfig || !paramConfig.color) return null;
+          const gradientId = `${parameter.key}Gradient`;
+          return (
+            <linearGradient key={gradientId} id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={paramConfig.color} stopOpacity={0.8} />
+              <stop offset="95%" stopColor={paramConfig.color} stopOpacity={0.2} />
+            </linearGradient>
+          );
+        })}
+      </defs>
+    </svg>
+  );
+};
+// --- End Helper function ---
 
 export default function Home() {
   const [sensorData, setSensorData] = useState<string>('');
@@ -691,6 +737,9 @@ export default function Home() {
 
   return (
     <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
+      {/* Render SVG Gradient Definitions */}
+      {renderGradientDefs(chartConfig, parameters)}
+
 
       {/* Header Section */}
       <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm flex justify-center items-center"> {/* Changed justify-between to justify-center */}
@@ -942,7 +991,7 @@ export default function Home() {
                     </p>
                     <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
+                        <AreaChart
                           data={analysisResults.filter(d => !d.isPrediction)} // Only show actual data for suitability index
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
@@ -976,20 +1025,21 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Line for Suitability Index */}
-                          <Line
-                            key={`suitabilityIndex-actual`}
-                            dataKey='suitabilityIndex'
-                            type="linear"
-                            stroke={chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))'}
-                            strokeWidth={2}
-                            dot={{ fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
-                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', stroke: 'hsl(var(--foreground))' }}
-                            name={chartConfig.suitabilityIndex?.label || "Suitability Index"}
-                            isAnimationActive={false}
-                            connectNulls={false} // Don't connect if data is missing
-                          />
-                        </LineChart>
+                          {/* Area for Suitability Index */}
+                           <Area
+                             key={`suitabilityIndex-actual`}
+                             dataKey='suitabilityIndex'
+                             type="linear"
+                             fill={`url(#suitabilityGradient)`} // Use gradient fill
+                             stroke={chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))'}
+                             strokeWidth={2}
+                             dot={{ fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
+                             activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', stroke: 'hsl(var(--foreground))' }}
+                             name={chartConfig.suitabilityIndex?.label || "Suitability Index"}
+                             isAnimationActive={false}
+                             connectNulls={false} // Don't connect if data is missing
+                           />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </ChartContainer>
                   </AccordionContent>
@@ -1012,7 +1062,7 @@ export default function Home() {
                     </p>
                     <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
+                        <AreaChart
                           data={analysisResults}
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
@@ -1046,54 +1096,136 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Line for actual data */}
-                          <Line
-                            key={`${parameter.key}-actual`}
-                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
-                            type="linear"
-                            stroke={'hsl(var(--foreground))'} // Black line for actual data
-                            strokeWidth={2}
-                            dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Use parameter color or black for dots
-                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', stroke: 'hsl(var(--foreground))' }} // Active dot styling
-                            name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
-                            isAnimationActive={false}
-                            connectNulls={false} // Do not connect across the prediction boundary
-                          />
-                          {/* Line for predicted data */}
-                          <Line
-                            key={`${parameter.key}-prediction`}
-                            dataKey={(payload: AnalysisResult, index: number) => {
-                              // Find the index of the first prediction
-                              const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                              // If this payload is a prediction, return its value
-                              if (payload.isPrediction) {
-                                return payload[parameter.key as keyof SensorData];
-                              }
-                              // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
-                              if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
-                                return payload[parameter.key as keyof SensorData];
-                              }
-                              // Otherwise, return null
-                              return null;
-                            }}
-                            type="linear"
-                            stroke={chartConfig.prediction.color} // Prediction line color from config
-                            strokeWidth={2}
-                            strokeDasharray="5 5" // Dashed line for predictions
-                            dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color or black
-                            activeDot={false} // Usually disable active dot for predictions
-                            name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
-                            isAnimationActive={false}
-                            connectNulls={true} // Connect prediction points to each other and the last actual point
-                          />
-
-                        </LineChart>
+                          {/* Area for actual data */}
+                           <Area
+                             key={`${parameter.key}-actual`}
+                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
+                             type="linear"
+                             fill={`url(#${parameter.key}Gradient)`} // Use gradient fill
+                             stroke={chartConfig[parameter.key]?.color || 'hsl(var(--foreground))'} // Use parameter color or black for stroke
+                             strokeWidth={2}
+                             dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Use parameter color or black for dots
+                             activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', stroke: 'hsl(var(--foreground))' }} // Active dot styling
+                             name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
+                             isAnimationActive={false}
+                             connectNulls={false} // Do not connect across the prediction boundary
+                           />
+                           {/* Area for predicted data */}
+                           <Area
+                             key={`${parameter.key}-prediction`}
+                             dataKey={(payload: AnalysisResult, index: number) => {
+                               // Find the index of the first prediction
+                               const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                               // If this payload is a prediction, return its value
+                               if (payload.isPrediction) {
+                                 return payload[parameter.key as keyof SensorData];
+                               }
+                               // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
+                               if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
+                                 return payload[parameter.key as keyof SensorData];
+                               }
+                               // Otherwise, return null
+                               return null;
+                             }}
+                             type="linear"
+                             fill={`url(#predictionGradient)`} // Use prediction gradient fill
+                             stroke={chartConfig.prediction.color} // Prediction line color from config
+                             strokeWidth={2}
+                             strokeDasharray="5 5" // Dashed line for predictions
+                             dot={{ fill: chartConfig.prediction.color, r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color or black
+                             activeDot={false} // Usually disable active dot for predictions
+                             name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
+                             isAnimationActive={false}
+                             connectNulls={true} // Connect prediction points to each other and the last actual point
+                           />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </ChartContainer>
                   </AccordionContent>
                 </Card>
               </AccordionItem>
             ))}
+
+            {/* Additional Visualization: Overall Parameter Distribution */}
+            <AccordionItem value="distribution" key="distribution" className="border-none">
+                <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                    <div className="flex items-center">
+                      <BarChartBig className="w-5 h-5 mr-2 text-cyan-500" />
+                      Average Parameter Values
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                    <p className="text-sm text-muted-foreground mb-4 text-foreground">
+                      Average values for each parameter across the observed data points (excluding predictions).
+                    </p>
+                    <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                         {/* Prepare data for Bar Chart - Calculate Averages */}
+                         {(() => {
+                             const actualData = analysisResults.filter(d => !d.isPrediction);
+                             const averages = parameters.map(param => {
+                                 const sum = actualData.reduce((acc, curr) => acc + (curr[param.key as keyof SensorData] as number || 0), 0);
+                                 const avg = actualData.length > 0 ? sum / actualData.length : 0;
+                                 return {
+                                     name: chartConfig[param.key]?.label || param.name,
+                                     value: avg,
+                                     fill: chartConfig[param.key]?.color || 'hsl(var(--foreground))'
+                                 };
+                             });
+
+                             return (
+                                 <AreaChart // Using AreaChart frame for consistency, but Bars inside
+                                    data={averages}
+                                    layout="vertical" // Vertical Bar Chart
+                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false}/>
+                                    <XAxis type="number" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
+                                    <YAxis dataKey="name" type="category" stroke="hsl(var(--foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} width={150} />
+                                    <RechartsTooltip
+                                        content={
+                                            <ChartTooltipContent
+                                                labelClassName="text-sm font-medium text-foreground"
+                                                className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
+                                                formatter={(value, name) => [`${(value as number).toFixed(2)}`, name]} // Show value with 2 decimal places
+                                                cursor={{ fill: 'hsl(var(--accent)/0.2)' }}
+                                            />
+                                        }
+                                    />
+                                    {/* Render Bars - One Area component per bar, effectively */}
+                                    {averages.map((entry, index) => (
+                                         <Area
+                                             key={`bar-${entry.name}`}
+                                             dataKey="value"
+                                             type="monotone"
+                                             fill={entry.fill}
+                                             stroke={entry.fill}
+                                             name={entry.name}
+                                             isAnimationActive={false}
+                                             // Hacky way to make Area act like Bar
+                                             // This approach might need refinement or switching to BarChart if available/preferred
+                                             stackId="a" // Stacking ensures bars are side-by-side if needed, here it just helps rendering
+                                             shape={<div/>} // Using div to avoid default Area shape rendering if possible? Needs testing.
+                                             // Ideally use <Bar> component if switching chart type
+                                         />
+                                     ))}
+                                    {/* Alternative using Recharts Bar if you change to BarChart:
+                                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                      {averages.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                      ))}
+                                    </Bar>
+                                    */}
+                                 </AreaChart>
+                             );
+                         })()}
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </AccordionContent>
+                </Card>
+            </AccordionItem>
+
           </Accordion>
         )}
 
@@ -1202,6 +1334,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-    
