@@ -1,10 +1,10 @@
-
 'use client';
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, UserCredential } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
+import { doc, setDoc, Timestamp } from 'firebase/firestore'; // Import Firestore functions
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +31,14 @@ export default function AuthPage() {
         toast({ title: 'Login Successful', description: `Welcome back, ${userCredential.user.email}!` });
       } else {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        toast({ title: 'Signup Successful', description: `Welcome, ${userCredential.user.email}!` });
+        const user = userCredential.user;
+        // Save user details to Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          createdAt: Timestamp.now(),
+        });
+        toast({ title: 'Signup Successful', description: `Welcome, ${user.email}! User details saved.` });
       }
       router.push('/'); // Redirect to home page after successful login/signup
     } catch (error: any) {
