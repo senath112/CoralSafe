@@ -27,7 +27,9 @@ L.Icon.Default.mergeOptions({
 const ChangeView: FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, zoom);
+     if (map) { // Check if map instance exists before calling setView
+        map.setView(center, zoom);
+     }
   }, [center, zoom, map]);
   return null;
 };
@@ -35,24 +37,38 @@ const ChangeView: FC<{ center: [number, number]; zoom: number }> = ({ center, zo
 
 const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
   const [isClient, setIsClient] = useState(false);
-  const mapRef = useRef<Map | null>(null); // Ref to store map instance
+  const mapRef = useRef<Map | null>(null);
 
   useEffect(() => {
-    setIsClient(true); // Will only run on client after mount
+    // Ensure this runs only on the client after the initial render
+    setIsClient(true);
 
-    // Cleanup function to remove map instance on unmount
+    // Cleanup function: This will be called when the component unmounts.
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null; // Important to nullify the ref
-        console.log("Leaflet map removed");
+        mapRef.current.remove(); // Properly remove the Leaflet map instance
+        mapRef.current = null;   // Clear the ref
+        console.log("Leaflet map instance removed on unmount cleanup.");
       }
     };
-  }, []); // Empty dependency array ensures this runs only once on mount and unmount
+  }, []); // Empty dependency array ensures this effect runs only once on mount and cleanup on unmount
 
-  // Render placeholder on server OR before client-side mount
+  // Render placeholder on server OR before client-side mount is complete
   if (!isClient) {
-    return <div style={{ height: '300px', width: '100%', background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', color: 'hsl(var(--muted-foreground))' }}>Loading map...</div>;
+    return (
+        <div style={{
+            height: '300px',
+            width: '100%',
+            background: 'hsl(var(--muted))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '8px',
+            color: 'hsl(var(--muted-foreground))'
+         }}>
+            Loading map...
+        </div>
+    );
   }
 
   // Render map only on the client
@@ -61,29 +77,37 @@ const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, dept
 
   return (
     <div style={{ height: '300px', width: '100%' }}>
-      {/* Conditionally render MapContainer to ensure it's only created once */}
-      {/* Use a key based on lat/lon if you need it to re-render on location change, but this might re-trigger the error */}
-      {/* A better approach is using ChangeView component inside */}
-      <MapContainer
-        center={position}
-        zoom={zoomLevel}
-        style={{ height: '100%', width: '100%', borderRadius: '8px' }}
-        scrollWheelZoom={false}
-        className="z-0" // Ensure z-index doesn't interfere
-        whenCreated={(mapInstance) => { mapRef.current = mapInstance; }} // Store map instance
-      >
-        <ChangeView center={position} zoom={zoomLevel} /> {/* Use this to update view */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <Marker position={position}>
-          <Popup>
-            Location: ({latitude.toFixed(4)}, {longitude.toFixed(4)})<br />
-            Depth: {depth}m
-          </Popup>
-        </Marker>
-      </MapContainer>
+      {/* MapContainer is rendered only when isClient is true */}
+      {isClient && (
+         <MapContainer
+            center={position}
+            zoom={zoomLevel}
+            style={{ height: '100%', width: '100%', borderRadius: '8px' }}
+            scrollWheelZoom={false}
+            className="z-0" // Ensure z-index doesn't interfere
+            whenCreated={(mapInstance) => {
+                // If a map instance already exists in the ref (e.g., due to fast refresh/Strict Mode), remove it first.
+                if (mapRef.current && mapRef.current !== mapInstance) {
+                    console.warn("whenCreated: mapRef had an existing instance. Removing it before assigning the new one.");
+                    mapRef.current.remove();
+                }
+                mapRef.current = mapInstance; // Store the new map instance
+            }}
+            // Do NOT use a key={...} prop here unless absolutely necessary, as it forces remounts which cause this error.
+            >
+            <ChangeView center={position} zoom={zoomLevel} /> {/* Handles map view updates */}
+            <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Marker position={position}>
+                <Popup>
+                Location: ({latitude.toFixed(4)}, {longitude.toFixed(4)})<br />
+                Depth: {depth}m
+                </Popup>
+            </Marker>
+         </MapContainer>
+      )}
     </div>
   );
 };
