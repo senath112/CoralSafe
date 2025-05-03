@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input'; // Import Input
+import { Label } from '@/components/ui/label'; // Import Label
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex } from '@/lib/utils';
@@ -31,7 +33,7 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2 } from 'lucide-react';
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, MapPin, ArrowDownUp } from 'lucide-react'; // Added MapPin, ArrowDownUp
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 
@@ -93,6 +95,17 @@ export default function Home() {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
+
+  // State for new inputs
+  const [longitude, setLongitude] = useState<string>('');
+  const [latitude, setLatitude] = useState<string>('');
+  const [depth, setDepth] = useState<string>('');
+
+  // State to store values after analysis starts
+  const [analyzedLongitude, setAnalyzedLongitude] = useState<string | null>(null);
+  const [analyzedLatitude, setAnalyzedLatitude] = useState<string | null>(null);
+  const [analyzedDepth, setAnalyzedDepth] = useState<string | null>(null);
+
 
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -373,6 +386,24 @@ export default function Home() {
       return;
     }
 
+     // Validate Latitude, Longitude, Depth
+     const lonNum = parseFloat(longitude);
+     const latNum = parseFloat(latitude);
+     const depthNum = parseFloat(depth);
+
+     if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+       toast({ title: 'Input Error', description: 'Invalid Longitude. Must be between -180 and 180.', variant: 'destructive' });
+       return;
+     }
+     if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+       toast({ title: 'Input Error', description: 'Invalid Latitude. Must be between -90 and 90.', variant: 'destructive' });
+       return;
+     }
+     if (isNaN(depthNum) || depthNum < 0) {
+       toast({ title: 'Input Error', description: 'Invalid Depth. Must be a non-negative number.', variant: 'destructive' });
+       return;
+     }
+
     setIsLoading(true);
     setAnalysisProgress(0); // Reset progress
     setAnalysisResults([]);
@@ -381,6 +412,11 @@ export default function Home() {
     setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
+
+    // Store submitted location/depth data
+    setAnalyzedLongitude(longitude);
+    setAnalyzedLatitude(latitude);
+    setAnalyzedDepth(depth);
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
     let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
@@ -601,7 +637,7 @@ export default function Home() {
       // Ensure progress is 100% visually after loading stops
       setAnalysisProgress(100);
     }
-  }, [sensorData, toast, analysisProgress]); // Added analysisProgress dependency for updateProgressSmoothly
+  }, [sensorData, toast, analysisProgress, longitude, latitude, depth]); // Added new dependencies
 
 
   return (
@@ -639,6 +675,49 @@ export default function Home() {
              </CardDescription>
           </CardHeader>
           <CardContent>
+             {/* New Input Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <Label htmlFor="longitude" className="text-foreground flex items-center mb-1">
+                  <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Longitude
+                </Label>
+                <Input
+                  id="longitude"
+                  type="number"
+                  placeholder="e.g., 145.5"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <Label htmlFor="latitude" className="text-foreground flex items-center mb-1">
+                   <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Latitude
+                </Label>
+                <Input
+                  id="latitude"
+                  type="number"
+                  placeholder="e.g., -16.8"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <Label htmlFor="depth" className="text-foreground flex items-center mb-1">
+                  <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Depth (meters)
+                </Label>
+                <Input
+                  id="depth"
+                  type="number"
+                  placeholder="e.g., 15"
+                  value={depth}
+                  onChange={(e) => setDepth(e.target.value)}
+                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            </div>
+
             <Textarea
               placeholder="Example:&#10;2023-01-01,Reef A,26.5,35.2,8.1,6.5,0.8,0.05&#10;2023-01-02,Reef A,26.7,35.1,8.1,6.6,0.7,0.04"
               value={sensorData}
@@ -650,7 +729,7 @@ export default function Home() {
             />
             <Button
               onClick={analyzeData}
-              disabled={isLoading || !sensorData.trim()}
+              disabled={isLoading || !sensorData.trim() || !longitude || !latitude || !depth } // Disable if any required field is missing
               className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
             >
               <Activity className="w-5 h-5 mr-2" /> {isLoading ? 'Analyzing...' : 'Analyze Data'}
@@ -670,11 +749,22 @@ export default function Home() {
         {/* Analysis Results Table */}
         {analysisResults.length > 0 && (
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
+            <CardHeader className="flex flex-row items-start sm:items-center justify-between pb-2">
+             <div>
+                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
+                {/* Display Analyzed Location and Depth */}
+                {(analyzedLongitude && analyzedLatitude && analyzedDepth) && (
+                    <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center flex-wrap">
+                        <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
+                        <span className="mr-2 text-foreground">Lon: {analyzedLongitude}, Lat: {analyzedLatitude}</span>
+                        <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
+                        <span className="text-foreground">Depth: {analyzedDepth}m</span>
+                    </CardDescription>
+                )}
+              </div>
               <Button
                 onClick={downloadReport}
-                className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
+                className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm mt-2 sm:mt-0" // Adjusted margin for smaller screens
                 size="sm"
               >
                 <Gauge className="w-4 h-4 mr-2" /> Download Report (PDF)
@@ -946,6 +1036,24 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
+
+         {/* Map and 3D Visualization Section - Placeholder */}
+         {analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth && (
+             <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                 <CardHeader>
+                    <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
+                    <CardDescription className="text-muted-foreground text-sm text-foreground">Map and 3D visualization based on provided coordinates and depth.</CardDescription>
+                 </CardHeader>
+                 <CardContent className="p-4">
+                     {/* TODO: Implement Map and 3D Visualization */}
+                     <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-md text-center text-muted-foreground">
+                         Map and 3D visualization components will be added here.
+                         <br />
+                         Longitude: {analyzedLongitude}, Latitude: {analyzedLatitude}, Depth: {analyzedDepth}m
+                     </div>
+                 </CardContent>
+             </Card>
+         )}
 
       </div>
 
