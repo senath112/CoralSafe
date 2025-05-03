@@ -2,10 +2,10 @@
 'use client';
 
 import type { FC } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'; // Added useMap
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { useEffect } from 'react'; // Added useEffect
+import { useEffect, useState } from 'react'; // Added useState
 
 interface MapVisualizationProps {
   latitude: number;
@@ -34,14 +34,20 @@ const ChangeView: FC<{ center: [number, number]; zoom: number }> = ({ center, zo
 
 
 const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
-  // Don't render on the server, provide a placeholder
-  if (typeof window === 'undefined') {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true); // Will only run on client after mount
+  }, []);
+
+  // Render placeholder on server OR before client-side mount
+  if (!isClient) {
     return <div style={{ height: '300px', width: '100%', background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', color: 'hsl(var(--muted-foreground))' }}>Loading map...</div>;
   }
 
+  // Render map only on the client
   const position: [number, number] = [latitude, longitude];
   const zoomLevel = 10;
-  // Removed key prop to manage updates internally via ChangeView
 
   return (
     <MapContainer
@@ -49,7 +55,7 @@ const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, dept
       zoom={zoomLevel}
       style={{ height: '300px', width: '100%', borderRadius: '8px' }}
       scrollWheelZoom={false}
-      className="z-0"
+      className="z-0" // Ensure z-index doesn't interfere
     >
       <ChangeView center={position} zoom={zoomLevel} /> {/* Add this component */}
       <TileLayer
@@ -67,4 +73,3 @@ const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, dept
 };
 
 export default MapVisualization;
-
