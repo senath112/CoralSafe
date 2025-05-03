@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,13 +32,9 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, LogOut, History, Loader2 } from 'lucide-react';
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2 } from 'lucide-react';
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
-import { useAuth } from '@/context/auth-context'; // Import useAuth hook
-import { auth, db } from '@/lib/firebase'; // Import auth and db
-import { signOut } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, Timestamp, orderBy } from "firebase/firestore"; // Import Firestore functions
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
@@ -60,14 +55,6 @@ export interface AnalysisResult extends SensorData {
   improvements?: string[];
   suitabilityIndex?: number;
   isPrediction?: boolean;
-}
-
-// Firestore document structure
-interface AnalysisRecord {
-    userId: string;
-    timestamp: Timestamp; // Use Firestore Timestamp
-    originalData: string; // Store the raw uploaded CSV
-    results: AnalysisResult[];
 }
 
 
@@ -94,32 +81,19 @@ const chartConfig: ChartConfig = {
 } satisfies ChartConfig;
 
 export default function Home() {
-  const { user, loading: authLoading } = useAuth(); // Get user and loading state
-  const router = useRouter();
   const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [trainedModelInfo, setTrainedModelInfo] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
-  const [historicalData, setHistoricalData] = useState<AnalysisRecord[]>([]);
   const { toast } = useToast();
 
-  const csvDataRef = useRef<string>('');
+  const csvDataRef = useRef<string>(''); // Keep ref for PDF generation if needed
   const reportRef = useRef<HTMLDivElement>(null);
 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
-
-    // Redirect to auth page if not logged in and auth check is complete
-    useEffect(() => {
-      if (!authLoading && !user) {
-        router.push('/auth');
-      }
-    }, [user, authLoading, router]);
-
 
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -174,111 +148,6 @@ export default function Home() {
       }
     };
   }, [isLoading, startTime, analysisProgress]);
-
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      toast({ title: 'Logout Successful', description: 'You have been logged out.' });
-      router.push('/auth'); // Redirect to login page
-    } catch (error: any) {
-      console.error('Logout failed:', error);
-      toast({
-        title: 'Logout Failed',
-        description: error.message || 'Could not log out.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Function to save analysis results to Firestore
-  const saveAnalysis = async () => {
-    if (!user || analysisResults.length === 0 || !csvDataRef.current) {
-      toast({
-        title: 'Cannot Save',
-        description: 'No user logged in, no results to save, or original data is missing.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const docRef = await addDoc(collection(db, "analysisRecords"), {
-        userId: user.uid,
-        timestamp: Timestamp.now(), // Use Firestore Timestamp
-        originalData: csvDataRef.current, // Save the raw CSV data
-        results: analysisResults, // Save the processed results
-      });
-      console.log("Document written with ID: ", docRef.id);
-      toast({
-        title: 'Analysis Saved',
-        description: 'Your analysis results have been saved successfully.',
-      });
-       // Optionally, refresh history after saving
-      // loadHistory();
-    } catch (e) {
-      console.error("Error adding document: ", e);
-      toast({
-        title: 'Save Failed',
-        description: 'Could not save the analysis results.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Function to load historical data for the logged-in user
-    const loadHistory = async () => {
-        if (!user) {
-            toast({ title: 'Not Logged In', description: 'Please log in to view history.', variant: 'destructive' });
-            return;
-        }
-        setIsLoadingHistory(true);
-        setHistoricalData([]); // Clear previous history
-        try {
-            const q = query(
-                collection(db, "analysisRecords"),
-                where("userId", "==", user.uid),
-                orderBy("timestamp", "desc") // Order by most recent first
-            );
-            const querySnapshot = await getDocs(q);
-            const history: AnalysisRecord[] = [];
-            querySnapshot.forEach((doc) => {
-                 const data = doc.data() as Omit<AnalysisRecord, 'id'>; // Type cast, assuming id is handled separately if needed
-                 // Ensure timestamp is converted correctly if needed (it should be a Firestore Timestamp object)
-                 history.push({
-                     // id: doc.id, // Include doc id if you need it later
-                     ...data,
-                 });
-            });
-            setHistoricalData(history);
-             if (history.length === 0) {
-                toast({ title: 'No History Found', description: 'You have no saved analysis records yet.' });
-             } else {
-                 toast({ title: 'History Loaded', description: `Loaded ${history.length} analysis records.` });
-             }
-        } catch (e) {
-            console.error("Error loading history: ", e);
-            toast({
-                title: 'History Load Failed',
-                description: 'Could not load historical analysis data.',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsLoadingHistory(false);
-        }
-    };
-
-    // Function to apply a historical record's data to the current view
-    const applyHistoricalRecord = (record: AnalysisRecord) => {
-        setSensorData(record.originalData);
-        setAnalysisResults(record.results);
-        // Optionally scroll to top or results section
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-         toast({ title: 'Historical Data Applied', description: 'Showing selected analysis record.' });
-    };
-
 
 
   const downloadReport = () => {
@@ -492,7 +361,7 @@ export default function Home() {
     return parsedEntries;
   };
 
-  const analyzeData = async () => {
+  const analyzeData = useCallback(async () => {
     console.log("analyzeData function called.");
     console.log("Current sensor data state:", sensorData);
     if (!sensorData.trim()) {
@@ -512,7 +381,7 @@ export default function Home() {
     setTrainedModelInfo(null); // Clear previous model
     setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
-    csvDataRef.current = sensorData; // Store raw CSV data for saving
+    csvDataRef.current = sensorData; // Store raw CSV data for PDF
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
     let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
@@ -520,6 +389,9 @@ export default function Home() {
     // Use requestAnimationFrame for smoother progress updates
     let frameId: number | null = null;
     const updateProgressSmoothly = (targetProgress: number) => {
+       // Ensure progress doesn't go backwards and stays within 0-100
+       targetProgress = Math.max(analysisProgress, Math.min(targetProgress, 100));
+
       if (frameId) cancelAnimationFrame(frameId);
 
       const animate = () => {
@@ -597,7 +469,7 @@ export default function Home() {
         console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
 
         let improvements: string[] = [];
-        if (isSuitable === false) {
+        if (!isSuitable) { // Now checks the final boolean directly
           // Get specific threatening factors first
           const specificThreats = Object.entries(threateningFactors)
             .filter(([_, value]) => value)
@@ -625,16 +497,19 @@ export default function Home() {
             }
           }
 
-        } else if (isSuitable === true) {
+        } else { // isSuitable is true
           // Check for cautions even if suitable overall
           const hasCautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
           if (hasCautions) {
-            improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+             const cautionsMatch = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
+              if (cautionsMatch && cautionsMatch[1]) {
+                  improvements = [`Environment is suitable, but monitor parameters in caution ranges: ${cautionsMatch[1]}.`];
+              } else {
+                 improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+              }
           } else {
             improvements = ["Environment appears ideal, continue monitoring."];
           }
-        } else { // isSuitable is null (should not happen with current logic, but handle defensively)
-          improvements = ["Could not determine specific actions."];
         }
 
 
@@ -645,7 +520,7 @@ export default function Home() {
 
         return {
           ...data,
-          isSuitable,
+          isSuitable, // Use the final boolean result
           summary,
           improvements, // Now an array of strings
           suitabilityIndex,
@@ -727,16 +602,7 @@ export default function Home() {
       // Ensure progress is 100% visually after loading stops
       setAnalysisProgress(100);
     }
-  };
-
-    // Render loading state or null if not authenticated
-    if (authLoading || !user) {
-      return ( // Keep showing loader until auth check is done or redirect happens
-          <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500">
-              <Loader2 className="h-16 w-16 animate-spin text-white" />
-          </div>
-      );
-    }
+  }, [sensorData, toast, analysisProgress]); // Added analysisProgress dependency for updateProgressSmoothly
 
 
   return (
@@ -754,39 +620,11 @@ export default function Home() {
                  </p>
             </div>
           </div>
-         {/* Logout Button */}
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            size="sm"
-            className="text-white hover:bg-white/20"
-          >
-            <LogOut className="w-4 h-4 mr-2" /> Logout
-          </Button>
+         {/* Removed Logout Button */}
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
-         {/* Save/Load Buttons */}
-          <div className="flex justify-end space-x-2 mb-4">
-              <Button
-                  onClick={saveAnalysis}
-                  disabled={isSaving || analysisResults.length === 0}
-                  className="bg-green-500 hover:bg-green-600 text-white"
-                  size="sm"
-              >
-                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <History className="w-4 h-4 mr-2" />}
-                  {isSaving ? 'Saving...' : 'Save Analysis'}
-              </Button>
-               <Button
-                    onClick={loadHistory}
-                    disabled={isLoadingHistory}
-                    className="bg-blue-500 hover:bg-blue-600 text-white"
-                    size="sm"
-                >
-                    {isLoadingHistory ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <History className="w-4 h-4 mr-2" />}
-                    {isLoadingHistory ? 'Loading...' : 'Load History'}
-                </Button>
-          </div>
+         {/* Removed Save/Load Buttons */}
 
         <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
           <CardHeader>
@@ -831,50 +669,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
-         {/* Historical Data Display */}
-          {historicalData.length > 0 && (
-                <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                    <CardHeader>
-                        <CardTitle className="text-xl font-semibold text-foreground">Analysis History</CardTitle>
-                         <CardDescription className="text-foreground">Select a record to view its analysis.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0 max-h-60 overflow-y-auto">
-                        <Table>
-                            <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
-                                <TableRow>
-                                    <TableHead className="text-foreground">Date Saved</TableHead>
-                                    <TableHead className="text-foreground">Location(s)</TableHead>
-                                    <TableHead className="text-foreground">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {historicalData.map((record, index) => {
-                                    // Extract unique locations from the results
-                                     const locations = [...new Set(record.results.map(r => r.location))].join(', ') || 'N/A';
-                                     // Format timestamp
-                                     const dateSaved = record.timestamp?.toDate()?.toLocaleString() ?? 'N/A';
-                                    return (
-                                        <TableRow key={index} className="hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10">
-                                            <TableCell className="text-foreground">{dateSaved}</TableCell>
-                                            <TableCell className="text-foreground">{locations}</TableCell>
-                                             <TableCell>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => applyHistoricalRecord(record)}
-                                                    className="border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-600"
-                                                >
-                                                    View
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-            )}
+         {/* Removed Historical Data Display */}
 
 
         {/* Analysis Results Table */}
