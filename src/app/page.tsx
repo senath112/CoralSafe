@@ -164,6 +164,9 @@ export default function Home() {
 
   // For time estimation
   const progressRef = useRef<{ time: number; progress: number }[]>([]);
+  // Ref to store the previous remaining time estimate for smoothing
+  const remainingTimeRef = useRef<number | null>(null);
+  const lastProgressRef = useRef<number>(0); // Track last progress update
 
 
    useEffect(() => {
@@ -175,24 +178,29 @@ export default function Home() {
             const elapsed = now - startTime;
             setElapsedTime(elapsed);
 
-            // Store current progress and time
-            progressRef.current.push({ time: elapsed, progress: analysisProgress });
-            // Keep only recent history (e.g., last 10 seconds)
-            const historyCutoff = elapsed - 10000;
-            progressRef.current = progressRef.current.filter(p => p.time >= historyCutoff);
+            const currentProgress = analysisProgress; // Use the state directly
+
+            // Store current progress and time ONLY IF progress increased
+            if (currentProgress > lastProgressRef.current) {
+                progressRef.current.push({ time: elapsed, progress: currentProgress });
+                lastProgressRef.current = currentProgress; // Update last known progress
+                // Keep only recent history (e.g., last 10 seconds)
+                const historyCutoff = elapsed - 10000;
+                progressRef.current = progressRef.current.filter(p => p.time >= historyCutoff);
+            }
+
 
             let remainingTimeMs = -1; // -1 indicates insufficient data or completion
 
-             if (analysisProgress > 0 && analysisProgress < 100 && progressRef.current.length > 1) {
+             if (currentProgress > 0 && currentProgress < 100 && progressRef.current.length > 1) {
                  const firstPoint = progressRef.current[0];
                  const lastPoint = progressRef.current[progressRef.current.length - 1];
                  const progressDelta = lastPoint.progress - firstPoint.progress;
                  const timeDelta = lastPoint.time - firstPoint.time;
 
-                 if (progressDelta > 0 && timeDelta > 0) {
-                     // Avoid division by zero and unstable rates near start
+                 if (progressDelta > 0 && timeDelta > 500) { // Ensure some time passed and progress made
                      const progressRate = progressDelta / timeDelta; // progress per millisecond
-                     const remainingProgress = 100 - analysisProgress;
+                     const remainingProgress = 100 - currentProgress;
                      remainingTimeMs = remainingProgress / progressRate;
                  }
              }
@@ -203,6 +211,7 @@ export default function Home() {
              if (remainingTimeMs > 0 && previousEstimate !== null) {
                  remainingTimeMs = alpha * remainingTimeMs + (1 - alpha) * previousEstimate;
              }
+             // Don't let the estimate drop below 0 if it was positive before
              remainingTimeRef.current = remainingTimeMs > 0 ? remainingTimeMs : null;
 
 
@@ -214,27 +223,30 @@ export default function Home() {
                 let timeString = '';
                 if (minutes > 0) {
                     timeString = `~${minutes}m ${seconds}s left`;
-                } else if (seconds > 0) {
+                } else if (seconds > 1) { // Only show seconds if more than 1
                     timeString = `~${seconds}s left`;
+                } else if (currentProgress < 100) { // Show finishing up only if not yet 100%
+                   timeString = 'Finishing up...';
                 } else {
-                    timeString = 'Finishing up...';
+                    timeString = ''; // Clear if already 100%
                 }
                 setRemainingTimeText(timeString);
 
-            } else if (analysisProgress === 0) {
+            } else if (currentProgress === 0) {
                 setRemainingTimeText('Starting analysis...');
-            } else if (analysisProgress >= 100) {
+            } else if (currentProgress >= 100) {
                 setRemainingTimeText('Analysis complete!');
                 if (intervalId) clearInterval(intervalId); // Stop interval when complete
             } else {
                 // If calculation failed or progress is stuck but not complete
                  setRemainingTimeText('Calculating time...');
             }
-        }, 1000); // Check every second
+        }, 500); // Check every 500ms for smoother updates
     } else {
         setElapsedTime(0);
         progressRef.current = []; // Clear history when not loading
         remainingTimeRef.current = null; // Clear estimate when not loading
+        lastProgressRef.current = 0; // Reset last progress
         if (analysisProgress === 100 && !isLoading) {
             setRemainingTimeText('Analysis complete!');
         } else {
@@ -249,9 +261,6 @@ export default function Home() {
     };
   }, [isLoading, startTime, analysisProgress]); // analysisProgress is crucial here
 
-  // Ref to store the previous remaining time estimate for smoothing
-  const remainingTimeRef = useRef<number | null>(null);
-
 
   const downloadReport = () => {
     const input = reportRef.current;
@@ -264,41 +273,63 @@ export default function Home() {
       return;
     }
 
+    // --- Temporarily change text colors for PDF generation ---
     const originalColors = new Map<HTMLElement | SVGTextElement | SVGTSpanElement, string>();
+    // Query for specific elements likely to have text, excluding those with specific background classes
     const elementsToColor = input.querySelectorAll<HTMLElement | SVGTextElement | SVGTSpanElement>(
-      'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not(.bg-green-200):not(.bg-yellow-200):not(.bg-red-200):not(.dark\\:bg-green-800\\/50):not(.dark\\:bg-yellow-800\\/50):not(.dark\\:bg-red-800\\/50):not(.bg-gray-200):not(.dark\\:bg-gray-700), text, tspan'
+        'p, span, h1, h2, h3, h4, h5, h6, li, th, td, code, div:not([class*="bg-"]):not([class*="dark:bg-"]), text, tspan'
+        // The :not selectors try to exclude elements that *already* have a background color,
+        // assuming those elements handle their own contrast (like the suitability badges)
+        // Adjust this selector if needed based on your component structure
     );
 
+
     elementsToColor.forEach(el => {
-      const elClasses = el.classList;
-      // Check if the element or any ancestor has background color classes
-      let hasBgClass = false;
-      let currentEl: HTMLElement | SVGElement | null = el as any; // Type assertion
+      // Check if the element itself or an ancestor has a specific background class we want to ignore
+      let ignoreColorChange = false;
+      let currentEl: Element | null = el;
       while (currentEl && currentEl !== input) {
-        if (currentEl.classList && ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => currentEl.classList.contains(cls))) {
-          hasBgClass = true;
+        if (currentEl.classList.contains('bg-green-200') ||
+            currentEl.classList.contains('bg-yellow-200') ||
+            currentEl.classList.contains('bg-red-200') ||
+            currentEl.classList.contains('bg-gray-200') || // Include prediction bg
+            currentEl.classList.contains('dark:bg-green-800/50') ||
+            currentEl.classList.contains('dark:bg-yellow-800/50') ||
+            currentEl.classList.contains('dark:bg-red-800/50') ||
+            currentEl.classList.contains('dark:bg-gray-700') || // Include prediction dark bg
+            currentEl.closest('.recharts-tooltip-wrapper') || // Ignore tooltips
+            currentEl.closest('header')) { // Ignore header
+          ignoreColorChange = true;
           break;
         }
-        currentEl = currentEl.parentElement as HTMLElement | SVGElement | null; // Cast parentElement
+        currentEl = currentEl.parentElement;
       }
 
 
-      if (!hasBgClass) {
-        originalColors.set(el, el.style.fill || el.style.color);
+      if (!ignoreColorChange) {
+        // Store original style (color for HTML, fill for SVG text)
+        originalColors.set(el, el.style.color || el.style.fill);
+
+        // Apply black color/fill
         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-          el.style.fill = 'black';
-          el.style.color = ''; // Reset color if it was set
-        } else {
-          el.style.color = 'black';
-          el.style.fill = ''; // Reset fill if it was set
+           el.style.setProperty('fill', 'black', 'important'); // Force fill for SVG text
+           el.style.color = ''; // Reset color just in case
+        } else if (el instanceof HTMLElement) {
+            el.style.setProperty('color', 'black', 'important'); // Force color for HTML elements
+            el.style.fill = ''; // Reset fill just in case
         }
       }
     });
+    // --- End temporary color change ---
+
 
     const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
     const summaryContents = Array.from(input.querySelectorAll<HTMLElement>('[data-summary-content]'));
     const actionsTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-actions-trigger]'));
     const actionsContents = Array.from(input.querySelectorAll<HTMLElement>('[data-actions-content]'));
+    const graphTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-graph-trigger]')); // Select graph triggers
+    const graphContents = Array.from(input.querySelectorAll<HTMLElement>('[data-graph-content]')); // Select graph content
+
 
     const originalStates = new Map<Element, string | null>();
 
@@ -316,33 +347,43 @@ export default function Home() {
     setState(summaryContents, 'open');
     setState(actionsTriggers, 'open');
     setState(actionsContents, 'open');
+    setState(graphTriggers, 'open'); // Expand graphs
+    setState(graphContents, 'open'); // Expand graphs
 
     // Ensure accordion content is fully visible before capturing
     setTimeout(() => {
       html2canvas(input, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff' // Force white background for PDF
+        backgroundColor: '#ffffff', // Force white background for PDF
+         scrollY: -window.scrollY, // Attempt to capture from the top
+         windowWidth: document.documentElement.offsetWidth,
+         windowHeight: document.documentElement.offsetHeight,
+         // Explicitly set width/height if needed, though scrollY should help
+         // width: input.scrollWidth,
+         // height: input.scrollHeight
       })
         .then((canvas) => {
           const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('p', 'mm', 'a4');
-          const imgProps = pdf.getImageProperties(imgData);
           const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          let heightLeft = pdfHeight;
-          let position = 0;
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          const imgProps = pdf.getImageProperties(imgData);
+          const imgWidth = pdfWidth - 20; // Add 10mm margin on each side
+          const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+          let heightLeft = imgHeight;
+          let position = 10; // Start 10mm from the top
 
-          pdf.addImage(imgData, 'PNG', 5, 5, pdfWidth - 10, pdfHeight - 10); // Add padding
-          heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
+          pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+          heightLeft -= (pdfHeight - 20); // Subtract available height (page height - top/bottom margins)
 
           while (heightLeft > 0) {
-            position = heightLeft - (pdfHeight - 10); // Adjust position for padding
+            position = position - (pdfHeight - 20); // Move position up by available height for next page
             pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 5, position - 5, pdfWidth - 10, pdfHeight - 10); // Add padding to subsequent pages
-            heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= (pdfHeight - 20);
           }
+
 
           pdf.save('coral_safe_report.pdf');
           toast({
@@ -354,32 +395,32 @@ export default function Home() {
           console.error('Error generating PDF:', error);
           toast({
             title: 'Error',
-            description: 'Failed to generate PDF. Please try again.',
+            description: 'Failed to generate PDF. Check console for details.',
             variant: 'destructive',
           });
         })
         .finally(() => {
-          // Restore original colors
-          elementsToColor.forEach(el => {
-            const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
-            if (!hasBgClass) {
-              const originalColor = originalColors.get(el);
-              if (originalColor !== undefined) {
-                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                  el.style.fill = originalColor;
-                } else {
-                  el.style.color = originalColor;
-                }
-              } else {
-                // If no original color was stored, explicitly reset
-                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                  el.style.fill = '';
-                } else {
-                  el.style.color = '';
-                }
+           // --- Restore original colors ---
+           elementsToColor.forEach((el, key) => {
+             const originalStyle = originalColors.get(key);
+              if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                // Check if original style was null/undefined/empty string for fill
+                 if (originalStyle === null || originalStyle === undefined || originalStyle === '') {
+                    el.style.removeProperty('fill'); // Remove the forced black fill
+                 } else {
+                    el.style.setProperty('fill', originalStyle); // Restore original fill
+                 }
+              } else if (el instanceof HTMLElement) {
+                 // Check if original style was null/undefined/empty string for color
+                  if (originalStyle === null || originalStyle === undefined || originalStyle === '') {
+                    el.style.removeProperty('color'); // Remove the forced black color
+                  } else {
+                     el.style.setProperty('color', originalStyle); // Restore original color
+                  }
               }
-            }
-          });
+           });
+          // --- End restoring colors ---
+
 
           // Restore original accordion states
           originalStates.forEach((state, el) => {
@@ -390,7 +431,7 @@ export default function Home() {
             }
           });
         });
-    }, 150); // Slightly increased timeout for rendering
+    }, 250); // Increased timeout slightly more for rendering complex content like graphs
   };
 
 
@@ -499,6 +540,7 @@ export default function Home() {
     setAnalysisProgress(0); // Reset progress
     setAnalysisResults([]);
     progressRef.current = []; // Clear progress history
+    lastProgressRef.current = 0; // Reset last progress ref
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
     setIdentifiedLocationName(null); // Clear previous location name
@@ -518,30 +560,34 @@ export default function Home() {
     // Use requestAnimationFrame for smoother progress updates
     let frameId: number | null = null;
     const updateProgressSmoothly = (targetProgress: number) => {
-       // Ensure progress doesn't go backwards and stays within 0-100
-       const currentProgress = analysisProgress; // Capture current state
-       const clampedTarget = Math.max(currentProgress, Math.min(targetProgress, 100));
+        // Ensure progress doesn't go backwards and stays within 0-100
+        const currentProg = lastProgressRef.current; // Use ref for current state to avoid stale closure
+        const clampedTarget = Math.max(currentProg, Math.min(targetProgress, 100));
 
-      if (frameId) cancelAnimationFrame(frameId);
+        // If already at or beyond target, just update state and ref
+        if (currentProg >= clampedTarget) {
+            if (currentProg !== analysisProgress) { // Only update state if different
+                 setAnalysisProgress(currentProg);
+            }
+            return;
+        }
 
-      const animate = (timestamp: number) => {
-        let startTimestamp: number | null = null;
-        if (!startTimestamp) startTimestamp = timestamp;
-        const elapsedAnim = timestamp - startTimestamp;
 
-        setAnalysisProgress(current => {
-          const diff = clampedTarget - current;
-          if (Math.abs(diff) < 0.1) {
-            frameId = null;
-            return clampedTarget; // Snap to target if close
-          }
-          // More gradual ease-out
-          const step = current + diff * 0.05; // Slower step
-          frameId = requestAnimationFrame(animate);
-          return step;
-        });
-      };
-      frameId = requestAnimationFrame(animate);
+        const step = (timestamp: number) => {
+           const newProgress = Math.min(lastProgressRef.current + 1, clampedTarget); // Increment by 1 or up to target
+           lastProgressRef.current = newProgress;
+           setAnalysisProgress(newProgress);
+
+           if (newProgress < clampedTarget) {
+               frameId = requestAnimationFrame(step);
+           } else {
+               frameId = null; // Animation finished
+           }
+       };
+
+        if (frameId === null) { // Start animation only if not already running
+           frameId = requestAnimationFrame(step);
+        }
     };
 
 
@@ -618,48 +664,43 @@ export default function Home() {
         console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
 
         let improvements: string[] = [];
-        if (!isSuitable) { // Now checks the final boolean directly
-          // Get specific threatening factors first
-          const specificThreats = Object.entries(threateningFactors)
-            .filter(([_, value]) => value)
-            .map(([key]) => {
-              switch (key) {
-                case 'temperature': return "Address high/low water temperature issues.";
-                case 'salinity': return "Investigate and mitigate salinity fluctuations.";
-                case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
-                case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
-                case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
-                case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
-                default: return `Address issues related to ${key}.`;
-              }
-            });
+        // Check threatening factors first, then cautions
+         const specificThreats = Object.entries(threateningFactors)
+              .filter(([_, value]) => value) // Filter where the value is true (threatening)
+              .map(([key]) => {
+                   switch (key) {
+                        case 'temperature': return `High/low water temperature detected. Consider measures to stabilize or shade if applicable.`;
+                        case 'salinity': return `Salinity is outside safe range. Identify and address sources of freshwater influx or excessive evaporation.`;
+                        case 'pHLevel': return `pH level is critically low (acidification). Investigate causes like CO2 absorption or pollution.`;
+                        case 'dissolvedOxygen': return `Dissolved oxygen is dangerously low (hypoxia). Enhance water circulation or aeration; reduce organic load.`;
+                        case 'turbidity': return `Turbidity is very high, blocking light. Address sediment runoff, dredging activities, or algal blooms.`;
+                        case 'nitrate': return `Nitrate level is critically high, risking algal blooms. Control nutrient sources from runoff or sewage.`;
+                        default: return `Address critical issues related to ${key}.`;
+                    }
+              });
 
-          if (specificThreats.length > 0) {
-            improvements = specificThreats;
-          } else {
-            // If isSuitable is false but no specific *threatening* factors, it means multiple cautions pushed it over
-            const cautionsMatch = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
-            if (cautionsMatch && cautionsMatch[1]) {
-              improvements = [`Multiple parameters are in caution ranges (${cautionsMatch[1]}), contributing to overall unsuitability. Review all parameters.`];
-            } else {
-              improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
-            }
-          }
-
-        } else { // isSuitable is true
-          // Check for cautions even if suitable overall
-          const hasCautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
-          if (hasCautions) {
-             const cautionsMatch = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
+         if (specificThreats.length > 0) {
+             improvements = specificThreats; // Focus on threats first
+         } else { // No threats, check for cautions
+              const cautionsMatch = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
               if (cautionsMatch && cautionsMatch[1]) {
-                  improvements = [`Environment is suitable, but monitor parameters in caution ranges: ${cautionsMatch[1]}.`];
-              } else {
-                 improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+                   const cautionParams = cautionsMatch[1].split(', ');
+                   improvements = cautionParams.map(param => {
+                       if (param.includes('Temp near upper limit')) return `Monitor temperature closely; it's nearing the upper caution limit.`;
+                       if (param.includes('Temp near lower limit')) return `Monitor temperature closely; it's nearing the lower caution limit.`;
+                       if (param.includes('Salinity in caution zone')) return `Salinity is in the caution zone. Monitor for further deviations.`;
+                       if (param.includes('pH near lower limit')) return `pH is nearing the lower caution limit. Monitor for acidification trends.`;
+                       if (param.includes('Dissolved oxygen low')) return `Dissolved oxygen is in the caution range. Monitor for potential hypoxia.`;
+                       if (param.includes('Turbidity elevated')) return `Turbidity is elevated. Monitor water clarity and potential light reduction.`;
+                       if (param.includes('Nitrate elevated')) return `Nitrate level is elevated. Monitor for potential contribution to algal growth.`;
+                       return `Monitor parameter: ${param}.`; // Fallback
+                   });
+              } else if (isSuitable) { // Suitable and no cautions mentioned
+                  improvements = ["Environment appears ideal. Continue regular monitoring."];
+              } else { // Should technically be caught by specificThreats, but as a fallback
+                   improvements = ["Multiple parameters are outside ideal ranges. Review all sensor data for specific issues."];
               }
-          } else {
-            improvements = ["Environment appears ideal, continue monitoring."];
-          }
-        }
+         }
 
 
         // Update progress during analysis (50% to 75%)
@@ -749,11 +790,15 @@ export default function Home() {
       setIsLoading(false);
       setStartTime(null);
       // Ensure progress is 100% visually after loading stops
-      setAnalysisProgress(100);
+       // Ensure progress visually reaches 100 only if no error occurred
+       if (analysisProgress >= 99.9) { // Use a threshold to avoid floating point issues
+          setAnalysisProgress(100);
+          setRemainingTimeText('Analysis complete!');
+       } else if (!isLoading) { // If stopped prematurely due to error
+           // Keep the current progress or reset, depending on desired behavior
+       }
     }
-  }, [sensorData, toast, analysisProgress, latitude, longitude, depth]);
-
-
+  }, [sensorData, toast, latitude, longitude, depth, analysisProgress]); // Removed analysisProgress dependency here
 
 
   return (
@@ -768,7 +813,7 @@ export default function Home() {
             <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
             <div>
                  <h1 className="text-4xl font-bold">CoralGuard</h1>
-                 <p className="text-lg text-cyan-100">V2.0 - Mariana</p>
+                 <p className="text-lg text-cyan-100">V2.4 - Mariana</p> {/* Updated Version */}
                  <p className="mt-1 text-xs text-blue-200">
                    Made with love by Senath Sethmika
                  </p>
@@ -788,7 +833,7 @@ export default function Home() {
               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
             </div>
 
-             <CardDescription className="text-muted-foreground text-sm">
+            <CardDescription className="text-muted-foreground text-sm">
                <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
                <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
              </CardDescription>
@@ -856,7 +901,7 @@ export default function Home() {
             {isLoading && (
               <div className="w-full px-4 mt-4">
                 <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                <p className="text-center text-sm text-foreground mt-2">
+                <p className="text-center text-sm text-foreground mt-2"> {/* Ensure foreground color */}
                   Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
                 </p>
               </div>
@@ -1000,13 +1045,13 @@ export default function Home() {
              {/* New Suitability Index Chart */}
              <AccordionItem value="suitabilityIndex" key="suitabilityIndex" className="border-none">
                 <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                  <AccordionTrigger data-graph-trigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
                     <div className="flex items-center">
                       <TrendingUp className="w-5 h-5 mr-2 text-cyan-500" /> {/* Using TrendingUp icon */}
                       Overall Suitability Index Trends
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                  <AccordionContent data-graph-content className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
                     <p className="text-sm text-muted-foreground mb-4 text-foreground">
                       Visualizing the overall Suitability Index (0-100) over time. Predictions are not available for this metric.
                     </p>
@@ -1071,13 +1116,13 @@ export default function Home() {
             {parameters.map((parameter) => (
               <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
                 <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                  <AccordionTrigger data-graph-trigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
                     <div className="flex items-center">
                       <parameter.icon className="w-5 h-5 mr-2 text-cyan-500" />
                        {parameter.name} Trends
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                  <AccordionContent data-graph-content className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
                     <p className="text-sm text-muted-foreground mb-4 text-foreground">
                       Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
                     </p>
@@ -1163,13 +1208,13 @@ export default function Home() {
             {/* Additional Visualization: Overall Parameter Distribution */}
             <AccordionItem value="distribution" key="distribution" className="border-none">
                 <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                  <AccordionTrigger data-graph-trigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
                     <div className="flex items-center">
                       <BarChartBig className="w-5 h-5 mr-2 text-cyan-500" />
                       Average Parameter Values
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                  <AccordionContent data-graph-content className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
                     <p className="text-sm text-muted-foreground mb-4 text-foreground">
                       Average values for each parameter across the observed data points (excluding predictions).
                     </p>
@@ -1334,6 +1379,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
