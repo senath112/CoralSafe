@@ -162,76 +162,81 @@ export default function Home() {
   const [analyzedDepth, setAnalyzedDepth] = useState<number | null>(null);
   const [identifiedLocationName, setIdentifiedLocationName] = useState<string | null>(null); // State for location name
 
+  // For time estimation
+  const progressRef = useRef<{ time: number; progress: number }[]>([]);
+
 
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
-    let previousProgress = -1; // Track previous progress
-    let stuckStart = -1; // Time when progress first appeared stuck
 
     if (isLoading && startTime !== null) {
-      intervalId = setInterval(() => {
-        const now = Date.now();
-        const elapsed = now - startTime;
-        setElapsedTime(elapsed);
+        intervalId = setInterval(() => {
+            const now = Date.now();
+            const elapsed = now - startTime;
+            setElapsedTime(elapsed);
 
-        if (analysisProgress > 0 && analysisProgress < 100) {
-          const totalEstimatedTime = elapsed / (analysisProgress / 100);
-          let remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
+            // Store current progress and time
+            progressRef.current.push({ time: elapsed, progress: analysisProgress });
+            // Keep only recent history (e.g., last 10 seconds)
+            const historyCutoff = elapsed - 10000;
+            progressRef.current = progressRef.current.filter(p => p.time >= historyCutoff);
 
-          // Simple heuristic adjustment for potentially stuck progress
-          let isStuck = false;
-          if (analysisProgress === previousProgress && elapsed > 5000) { // Stuck for 5s+
-             if (stuckStart === -1) stuckStart = now; // Mark when stuck started
-             if (now - stuckStart > 10000) { // Stuck for > 10 seconds
-                 isStuck = true;
-                 // Removed aggressive time multiplication
-             }
-          } else {
-             stuckStart = -1; // Reset stuck timer if progress moved
-          }
-          previousProgress = analysisProgress; // Update previous progress
+            let remainingTimeMs = -1; // -1 indicates insufficient data or completion
 
-          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
-          const minutes = Math.floor(remainingSeconds / 60);
-          const seconds = remainingSeconds % 60;
+            if (analysisProgress > 0 && analysisProgress < 100 && progressRef.current.length > 1) {
+                const firstPoint = progressRef.current[0];
+                const lastPoint = progressRef.current[progressRef.current.length - 1];
+                const progressDelta = lastPoint.progress - firstPoint.progress;
+                const timeDelta = lastPoint.time - firstPoint.time;
 
-          if (remainingSeconds > 0) { // Only show if there's time remaining
-            const stuckIndicator = isStuck ? " (Recalculating...)" : "";
-            if (minutes > 0) {
-              setRemainingTimeText(`~${minutes}m ${seconds}s left${stuckIndicator}`);
-            } else {
-              setRemainingTimeText(`~${seconds}s left${stuckIndicator}`);
+                if (progressDelta > 0 && timeDelta > 0) {
+                    const progressRate = progressDelta / timeDelta; // progress per millisecond
+                    const remainingProgress = 100 - analysisProgress;
+                    remainingTimeMs = remainingProgress / progressRate;
+                }
             }
-          } else {
-             // If remaining time is zero but progress not 100, show "Finishing up"
-             setRemainingTimeText(analysisProgress < 100 ? 'Finishing up...' : 'Analysis complete!');
-          }
 
-        } else if (analysisProgress === 0) {
-          setRemainingTimeText('Starting analysis...');
-        } else if (analysisProgress === 100) {
-           setRemainingTimeText('Analysis complete!');
-        } else {
-            setRemainingTimeText('Finishing up...'); // Catch-all for edge cases
-        }
-      }, 1000); // Check every second
+            if (remainingTimeMs > 0) {
+                const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = remainingSeconds % 60;
+
+                let timeString = '';
+                if (minutes > 0) {
+                    timeString = `~${minutes}m ${seconds}s left`;
+                } else if (seconds > 0) {
+                    timeString = `~${seconds}s left`;
+                } else {
+                    timeString = 'Finishing up...';
+                }
+                setRemainingTimeText(timeString);
+
+            } else if (analysisProgress === 0) {
+                setRemainingTimeText('Starting analysis...');
+            } else if (analysisProgress >= 100) {
+                setRemainingTimeText('Analysis complete!');
+                if (intervalId) clearInterval(intervalId); // Stop interval when complete
+            } else {
+                // If calculation failed or progress is stuck but not complete
+                 setRemainingTimeText('Calculating time...');
+            }
+        }, 1000); // Check every second
     } else {
-      setElapsedTime(0);
-      stuckStart = -1; // Reset stuck timer when not loading
-      previousProgress = -1;
-      if (analysisProgress === 100 && !isLoading) { // Only show complete when not loading anymore
-        setRemainingTimeText('Analysis complete!');
-      } else if (!isLoading) { // Clear text if not loading and not complete
-        setRemainingTimeText('');
-      }
+        setElapsedTime(0);
+        progressRef.current = []; // Clear history when not loading
+        if (analysisProgress === 100 && !isLoading) {
+            setRemainingTimeText('Analysis complete!');
+        } else {
+            setRemainingTimeText(''); // Clear text if stopped/not started
+        }
     }
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+        if (intervalId) {
+            clearInterval(intervalId);
+        }
     };
-  }, [isLoading, startTime, analysisProgress]);
+  }, [isLoading, startTime, analysisProgress]); // analysisProgress is crucial here
 
 
   const downloadReport = () => {
@@ -479,6 +484,7 @@ export default function Home() {
     setIsLoading(true);
     setAnalysisProgress(0); // Reset progress
     setAnalysisResults([]);
+    progressRef.current = []; // Clear progress history
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
     setIdentifiedLocationName(null); // Clear previous location name
@@ -579,7 +585,6 @@ export default function Home() {
       if (trainingResult) {
         normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
       }
-      console.log("Model training finished. Training result:", trainingResult);
       updateProgressSmoothly(45); // Training complete
 
       // --- Analyze Data Points ---
@@ -992,7 +997,7 @@ export default function Home() {
                     </p>
                     <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart
+                        <LineChart // Changed to LineChart
                           data={analysisResults.filter(d => !d.isPrediction)} // Only show actual data for suitability index
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
@@ -1027,7 +1032,6 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Area for Suitability Index Fill - Removed */}
                            {/* Line to connect the dots */}
                            <Line
                              key={`suitabilityIndex-line`}
@@ -1041,7 +1045,7 @@ export default function Home() {
                              isAnimationActive={false}
                              connectNulls={false} // Don't connect if data is missing
                            />
-                        </AreaChart>
+                        </LineChart>
                       </ResponsiveContainer>
                     </ChartContainer>
                   </AccordionContent>
@@ -1099,7 +1103,6 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Removed Area fills */}
                             {/* Line for actual data */}
                             <Line
                                 key={`${parameter.key}-actual-line`}
@@ -1316,4 +1319,5 @@ export default function Home() {
     </div>
   );
 }
+
 
