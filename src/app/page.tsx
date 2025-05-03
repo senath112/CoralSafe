@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -77,7 +76,7 @@ const chartConfig: ChartConfig = {
   dissolvedOxygen: { label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind },
   turbidity: { label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog },
   nitrate: { label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet }, // Use accent for nitrate line
-  prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
+  prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
 } satisfies ChartConfig;
 
 export default function Home() {
@@ -609,7 +608,7 @@ export default function Home() {
     <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
 
       {/* Header Section */}
-      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm flex justify-between items-center">
+      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm flex justify-center items-center"> {/* Changed justify-between to justify-center */}
          <div className="flex items-center justify-center">
             <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
             <div>
@@ -620,11 +619,9 @@ export default function Home() {
                  </p>
             </div>
           </div>
-         {/* Removed Logout Button */}
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
-         {/* Removed Save/Load Buttons */}
 
         <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
           <CardHeader>
@@ -661,15 +658,13 @@ export default function Home() {
             {isLoading && (
               <div className="w-full px-4 mt-4">
                 <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                <p className="text-center text-sm text-foreground mt-2"> {/* Changed to text-foreground */}
+                <p className="text-center text-sm text-foreground mt-2">
                   Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
                 </p>
               </div>
             )}
           </CardContent>
         </Card>
-
-         {/* Removed Historical Data Display */}
 
 
         {/* Analysis Results Table */}
