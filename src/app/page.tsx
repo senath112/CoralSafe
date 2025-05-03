@@ -33,7 +33,7 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin, TrendingUp, BarChartBig } from 'lucide-react'; // Added TrendingUp, BarChartBig
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin, TrendingUp, BarChartBig, LocateFixed } from 'lucide-react'; // Added LocateFixed
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
@@ -155,6 +155,7 @@ export default function Home() {
   const [latitude, setLatitude] = useState<string>('');
   const [longitude, setLongitude] = useState<string>('');
   const [depth, setDepth] = useState<string>('');
+  const [isFetchingLocation, setIsFetchingLocation] = useState<boolean>(false); // State for location fetching
 
   // State to store values after analysis starts
   const [analyzedLatitude, setAnalyzedLatitude] = useState<number | null>(null);
@@ -800,6 +801,45 @@ export default function Home() {
     }
   }, [sensorData, toast, latitude, longitude, depth, analysisProgress]); // Removed analysisProgress dependency here
 
+    // Function to get current location
+  const fetchCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: 'Geolocation Error',
+        description: 'Geolocation is not supported by your browser.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsFetchingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitude(position.coords.latitude.toFixed(6)); // Keep reasonable precision
+        setLongitude(position.coords.longitude.toFixed(6));
+        setIsFetchingLocation(false);
+        toast({
+          title: 'Location Fetched',
+          description: 'Current latitude and longitude populated.',
+        });
+      },
+      (error) => {
+        setIsFetchingLocation(false);
+        toast({
+          title: 'Geolocation Error',
+          description: `Failed to get location: ${error.message}`,
+          variant: 'destructive',
+        });
+        console.error('Geolocation error:', error);
+      },
+      {
+        enableHighAccuracy: true, // Request higher accuracy
+        timeout: 10000,          // Set a timeout (10 seconds)
+        maximumAge: 0            // Don't use cached location
+      }
+    );
+  };
+
 
   return (
     <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
@@ -841,45 +881,62 @@ export default function Home() {
           <CardContent>
              {/* New Input Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <div>
-                <Label htmlFor="latitude" className="text-foreground flex items-center mb-1">
-                    <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Latitude
-                </Label>
-                <Input
-                  id="latitude"
-                  type="number"
-                  placeholder="e.g., 6.9271"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-              <div>
-                <Label htmlFor="longitude" className="text-foreground flex items-center mb-1">
-                    <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Longitude
-                </Label>
-                <Input
-                  id="longitude"
-                  type="number"
-                  placeholder="e.g., 79.8612"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-              <div>
-                <Label htmlFor="depth" className="text-foreground flex items-center mb-1">
-                  <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Depth (meters)
-                </Label>
-                <Input
-                  id="depth"
-                  type="number"
-                  placeholder="e.g., 15"
-                  value={depth}
-                  onChange={(e) => setDepth(e.target.value)}
-                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
+               {/* Latitude Input */}
+                <div>
+                    <Label htmlFor="latitude" className="text-foreground flex items-center mb-1">
+                        <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Latitude
+                    </Label>
+                    <Input
+                        id="latitude"
+                        type="number"
+                        placeholder="e.g., 6.9271"
+                        value={latitude}
+                        onChange={(e) => setLatitude(e.target.value)}
+                        className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    />
+                </div>
+
+                {/* Longitude Input & Fetch Button */}
+                <div className="relative"> {/* Use relative positioning for button */}
+                    <Label htmlFor="longitude" className="text-foreground flex items-center mb-1">
+                        <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Longitude
+                    </Label>
+                     <div className="flex items-center gap-2">
+                        <Input
+                            id="longitude"
+                            type="number"
+                            placeholder="e.g., 79.8612"
+                            value={longitude}
+                            onChange={(e) => setLongitude(e.target.value)}
+                            className="flex-grow text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        />
+                        <Button
+                            onClick={fetchCurrentLocation}
+                            disabled={isFetchingLocation}
+                            size="icon"
+                            variant="outline"
+                            className="p-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 dark:border-cyan-400 dark:text-cyan-400 dark:hover:bg-cyan-900/50"
+                            title="Fetch Current Location"
+                        >
+                            {isFetchingLocation ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Depth Input */}
+                <div>
+                    <Label htmlFor="depth" className="text-foreground flex items-center mb-1">
+                        <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Depth (meters)
+                    </Label>
+                    <Input
+                        id="depth"
+                        type="number"
+                        placeholder="e.g., 15"
+                        value={depth}
+                        onChange={(e) => setDepth(e.target.value)}
+                        className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    />
+                </div>
             </div>
 
             <Textarea
@@ -1379,8 +1436,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
-
