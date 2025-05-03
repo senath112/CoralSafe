@@ -38,7 +38,7 @@ import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Ga
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
-import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
+import 'mapbox-gl/dist/mapbox-gl.css'; // Import Mapbox CSS
 
 
 // Dynamically import visualization components to avoid SSR issues
@@ -1071,7 +1071,6 @@ export default function Home() {
                               <MapVisualization
                                   latitude={analyzedLatitude}
                                   longitude={analyzedLongitude}
-                                  depth={analyzedDepth}
                               />
                           </div>
                       </div>
@@ -1106,3 +1105,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -1,66 +1,39 @@
 
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
-// Removed the problematic block using require() for icons, as it causes issues with Turbopack.
-// Dynamic import and CSS import should handle default icon paths if configured correctly.
-// If icons still don't appear, further investigation might be needed for Turbopack compatibility.
-
+import React, { useState, useEffect } from 'react';
+import Map, { Marker, Popup, NavigationControl, FullscreenControl, ScaleControl, GeolocateControl } from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapVisualizationProps {
   latitude: number | null;
   longitude: number | null;
-  depth: number | null; // Included depth for potential popup info
 }
 
-// Component to update map view when position changes
-const ChangeView: React.FC<{ center: L.LatLngExpression; zoom: number }> = ({ center, zoom }) => {
-  const map = useMap();
-  useEffect(() => {
-    // Check if center is valid before setting view
-    if (center && typeof center[0] === 'number' && typeof center[1] === 'number' && !isNaN(center[0]) && !isNaN(center[1])) {
-        console.log("MapVisualization: Setting map view to:", center, "Zoom:", zoom);
-        map.setView(center, zoom);
-    } else {
-        console.warn("MapVisualization: Invalid center received for ChangeView:", center);
-    }
-  }, [map, center, zoom]);
-  return null;
-};
-
-const MapVisualization: React.FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
+const MapVisualization: React.FC<MapVisualizationProps> = ({ latitude, longitude }) => {
   const [isClient, setIsClient] = useState(false);
-  const mapRef = useRef<L.Map | null>(null); // Ref to store map instance
+  const [popupInfo, setPopupInfo] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
-    // This ensures Leaflet code runs only on the client
+    // Ensure this code runs only on the client
     setIsClient(true);
-    // Fix for default icon path issues with Next.js/Webpack
-    // You might need this if marker icons are missing
-    (async () => {
-      if (typeof window !== 'undefined') {
-        // @ts-ignore
-        delete L.Icon.Default.prototype._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: (await import('leaflet/dist/images/marker-icon-2x.png')).default.src,
-          iconUrl: (await import('leaflet/dist/images/marker-icon.png')).default.src,
-          shadowUrl: (await import('leaflet/dist/images/marker-shadow.png')).default.src,
-        });
-         console.log("MapVisualization: Leaflet icons configured.");
-      }
-    })();
+  }, []);
 
-  }, []); // Empty dependency array ensures this runs only once on mount
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+  if (!mapboxToken) {
+    console.error("Mapbox token is not configured. Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN environment variable.");
+    return (
+      <div className="w-full h-[300px] flex items-center justify-center bg-red-100 dark:bg-red-900 rounded-lg text-red-700 dark:text-red-200">
+        Map configuration error: Missing access token.
+      </div>
+    );
+  }
 
   // Ensure latitude and longitude are valid numbers
   const isValidLatitude = typeof latitude === 'number' && !isNaN(latitude) && latitude >= -90 && latitude <= 90;
   const isValidLongitude = typeof longitude === 'number' && !isNaN(longitude) && longitude >= -180 && longitude <= 180;
-  const position: L.LatLngExpression | null = isValidLatitude && isValidLongitude ? [latitude, longitude] : null;
-  const zoomLevel = 13; // Adjust zoom level as needed
+  const position: { latitude: number; longitude: number } | null = isValidLatitude && isValidLongitude ? { latitude, longitude } : null;
 
   // Placeholder until client is ready or if position is invalid
   if (!isClient) {
@@ -70,39 +43,55 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ latitude, longitude
     return <div className="w-full h-[300px] flex items-center justify-center bg-gray-200 dark:bg-gray-800 rounded-lg text-muted-foreground">Enter valid Latitude and Longitude.</div>;
   }
 
-
   return (
-    <div className="w-full h-full">
-      {/* MapContainer renders only once when position is valid and client is ready */}
-      {/* Subsequent updates are handled by ChangeView */}
-      <MapContainer
-        center={position} // Initial center
-        zoom={zoomLevel} // Initial zoom
-        style={{ height: '100%', width: '100%', borderRadius: '8px' }}
-        scrollWheelZoom={false} // Disable scroll wheel zoom if desired
-        whenCreated={(mapInstance) => {
-          // Prevent re-initialization if map already exists
-          if (!mapRef.current) {
-             mapRef.current = mapInstance;
-             console.log('Map created:', mapInstance);
-          }
+    <div className="w-full h-full rounded-lg overflow-hidden shadow-md">
+      <Map
+        initialViewState={{
+          longitude: position.longitude,
+          latitude: position.latitude,
+          zoom: 13, // Adjust zoom level as needed
         }}
-        // No key prop needed here, rely on ChangeView for updates
+        style={{ width: '100%', height: '100%' }}
+        mapStyle="mapbox://styles/mapbox/streets-v11" // Choose a Mapbox style
+        mapboxAccessToken={mapboxToken}
       >
-        <ChangeView center={position} zoom={zoomLevel} />
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        <GeolocateControl position="top-left" />
+        <FullscreenControl position="top-left" />
+        <NavigationControl position="top-left" />
+        <ScaleControl />
+
+        <Marker
+          longitude={position.longitude}
+          latitude={position.latitude}
+          anchor="bottom"
+          onClick={e => {
+            // If we let the click event propagates to the map, it will immediately close the popup
+            // with `closeOnClick: true`
+            e.originalEvent.stopPropagation();
+            setPopupInfo(position);
+          }}
+          color="#3FB1CE" // Use a cyan-like color for the marker
         />
-        <Marker position={position}>
-          <Popup>
-            Location: ({latitude?.toFixed(4)}, {longitude?.toFixed(4)}) <br />
-            {depth !== null && !isNaN(depth) ? `Depth: ${depth}m` : 'Depth not specified'}
+
+        {popupInfo && (
+          <Popup
+            anchor="top"
+            longitude={Number(popupInfo.longitude)}
+            latitude={Number(popupInfo.latitude)}
+            onClose={() => setPopupInfo(null)}
+            closeButton={true}
+            closeOnClick={false}
+            className="text-sm"
+          >
+            <div>
+              Location: ({popupInfo.latitude.toFixed(4)}, {popupInfo.longitude.toFixed(4)})
+            </div>
           </Popup>
-        </Marker>
-      </MapContainer>
+        )}
+      </Map>
     </div>
   );
 };
 
 export default MapVisualization;
+
