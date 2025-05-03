@@ -131,7 +131,8 @@ export default function Home() {
           let isStuck = false;
           if (elapsed > 5000 && analysisProgress < 10) {
              isStuck = true;
-             remainingTimeMs *= 2; // Double estimate if slow start
+             // Removed aggressive time multiplication as it can be inaccurate
+             // remainingTimeMs *= 2; // Double estimate if slow start
           }
 
           const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
@@ -1098,3 +1099,4 @@ export default function Home() {
     </div>
   );
 }
+

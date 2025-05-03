@@ -2,9 +2,10 @@
 'use client';
 
 import type { FC } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'; // Added useMap
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet'; // Import Leaflet library itself
+import L from 'leaflet';
+import { useEffect } from 'react'; // Added useEffect
 
 interface MapVisualizationProps {
   latitude: number;
@@ -13,7 +14,7 @@ interface MapVisualizationProps {
 }
 
 // Fix for default marker icon issue with Webpack
-// @ts-ignore - This is a known workaround for Leaflet in certain build environments
+// @ts-ignore
 delete L.Icon.Default.prototype._getIconUrl;
 
 L.Icon.Default.mergeOptions({
@@ -22,27 +23,35 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
+// Component to update map view when props change
+const ChangeView: FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+};
+
 
 const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
-  // Don't render on the server, Leaflet needs the window object
+  // Don't render on the server, provide a placeholder
   if (typeof window === 'undefined') {
-    return null;
+    return <div style={{ height: '300px', width: '100%', background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', color: 'hsl(var(--muted-foreground))' }}>Loading map...</div>;
   }
 
   const position: [number, number] = [latitude, longitude];
-  // Using latitude and longitude in the key forces React to create a new
-  // MapContainer instance when the location changes, preventing initialization errors.
-  const mapKey = `${latitude}-${longitude}`;
+  const zoomLevel = 10;
+  // Removed key prop to manage updates internally via ChangeView
 
   return (
     <MapContainer
-      key={mapKey} // Add key here
       center={position}
-      zoom={10}
+      zoom={zoomLevel}
       style={{ height: '300px', width: '100%', borderRadius: '8px' }}
       scrollWheelZoom={false}
-      className="z-0" // Ensure map is behind popups if necessary
-      >
+      className="z-0"
+    >
+      <ChangeView center={position} zoom={zoomLevel} /> {/* Add this component */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -58,3 +67,4 @@ const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, dept
 };
 
 export default MapVisualization;
+
