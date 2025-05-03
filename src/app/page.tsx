@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -113,7 +114,7 @@ const renderGradientDefs = (config: ChartConfig, parameters: { key: string }[]) 
 
         {/* Prediction Gradient */}
         <linearGradient id={predictionGradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor={config.prediction.color} stopOpacity={0.7} />
+          <stop offset="5%" stopColor={config.prediction.color} stopOpacity={0.5} />
           <stop offset="95%" stopColor={config.prediction.color} stopOpacity={0.1} />
         </linearGradient>
 
@@ -124,8 +125,8 @@ const renderGradientDefs = (config: ChartConfig, parameters: { key: string }[]) 
           const gradientId = `${parameter.key}Gradient`;
           return (
             <linearGradient key={gradientId} id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={paramConfig.color} stopOpacity={0.8} />
-              <stop offset="95%" stopColor={paramConfig.color} stopOpacity={0.2} />
+              <stop offset="5%" stopColor={paramConfig.color} stopOpacity={0.6} /> {/* Slightly less opaque fill */}
+              <stop offset="95%" stopColor={paramConfig.color} stopOpacity={0.1} />
             </linearGradient>
           );
         })}
@@ -995,6 +996,17 @@ export default function Home() {
                           data={analysisResults.filter(d => !d.isPrediction)} // Only show actual data for suitability index
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
+                           {/* Background Gradient based on suitability */}
+                           <defs>
+                             <linearGradient id="suitabilityBackgroundGradient" x1="0" y1="0" x2="0" y2="1">
+                               {/* Gradient stops based on suitability index */}
+                               <stop offset="0%" stopColor="hsl(0, 70%, 80%)" stopOpacity={0.3} />   {/* Red-ish at bottom (low suitability) */}
+                               <stop offset="50%" stopColor="hsl(45, 90%, 85%)" stopOpacity={0.3} />  {/* Yellow-ish in middle */}
+                               <stop offset="100%" stopColor="hsl(120, 60%, 80%)" stopOpacity={0.3} /> {/* Green-ish at top (high suitability) */}
+                             </linearGradient>
+                           </defs>
+                           <rect x="0" y="0" width="100%" height="100%" fill="url(#suitabilityBackgroundGradient)" />
+
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                           <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
                           <YAxis domain={[0, 100]} stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
@@ -1025,14 +1037,23 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Area for Suitability Index */}
+                          {/* Area for Suitability Index Fill */}
                            <Area
-                             key={`suitabilityIndex-actual`}
+                             key={`suitabilityIndex-fill`}
                              dataKey='suitabilityIndex'
                              type="linear"
                              fill={`url(#suitabilityGradient)`} // Use gradient fill
-                             stroke={chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))'}
-                             strokeWidth={2}
+                             stroke="none" // No stroke for the fill area
+                             isAnimationActive={false}
+                             connectNulls={false} // Don't connect if data is missing
+                           />
+                           {/* Line to connect the dots */}
+                           <Line
+                             key={`suitabilityIndex-line`}
+                             dataKey='suitabilityIndex'
+                             type="linear"
+                             stroke="#000000" // Black line
+                             strokeWidth={1.5} // Medium width
                              dot={{ fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
                              activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', stroke: 'hsl(var(--foreground))' }}
                              name={chartConfig.suitabilityIndex?.label || "Suitability Index"}
@@ -1066,6 +1087,17 @@ export default function Home() {
                           data={analysisResults}
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
+                           {/* Background Gradient based on suitability */}
+                           <defs>
+                             <linearGradient id={`${parameter.key}BackgroundGradient`} x1="0" y1="0" x2="0" y2="1">
+                               {/* Gradient stops based on suitability index */}
+                               <stop offset="0%" stopColor="hsl(0, 70%, 80%)" stopOpacity={0.3} />   {/* Red-ish at bottom (low suitability) */}
+                               <stop offset="50%" stopColor="hsl(45, 90%, 85%)" stopOpacity={0.3} />  {/* Yellow-ish in middle */}
+                               <stop offset="100%" stopColor="hsl(120, 60%, 80%)" stopOpacity={0.3} /> {/* Green-ish at top (high suitability) */}
+                             </linearGradient>
+                           </defs>
+                           <rect x="0" y="0" width="100%" height="100%" fill={`url(#${parameter.key}BackgroundGradient)`} />
+
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                           <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
                           <YAxis stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
@@ -1096,47 +1128,65 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Area for actual data */}
+                          {/* Area for actual data fill */}
                            <Area
-                             key={`${parameter.key}-actual`}
+                             key={`${parameter.key}-actual-fill`}
                              dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
                              type="linear"
-                             fill={`url(#${parameter.key}Gradient)`} // Use gradient fill
-                             stroke={chartConfig[parameter.key]?.color || 'hsl(var(--foreground))'} // Use parameter color or black for stroke
-                             strokeWidth={2}
-                             dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Use parameter color or black for dots
-                             activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', stroke: 'hsl(var(--foreground))' }} // Active dot styling
-                             name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
+                             fill={`url(#${parameter.key}Gradient)`} // Use gradient fill for area
+                             stroke="none" // No stroke for the fill area
                              isAnimationActive={false}
                              connectNulls={false} // Do not connect across the prediction boundary
                            />
-                           {/* Area for predicted data */}
+                            {/* Line for actual data */}
+                            <Line
+                                key={`${parameter.key}-actual-line`}
+                                dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
+                                type="linear"
+                                stroke="#000000" // Black line
+                                strokeWidth={1.5} // Medium width
+                                dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Use parameter color or black for dots
+                                activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', stroke: 'hsl(var(--foreground))' }} // Active dot styling
+                                name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
+                                isAnimationActive={false}
+                                connectNulls={false} // Do not connect across the prediction boundary
+                             />
+
+                           {/* Area for predicted data fill */}
                            <Area
-                             key={`${parameter.key}-prediction`}
+                             key={`${parameter.key}-prediction-fill`}
                              dataKey={(payload: AnalysisResult, index: number) => {
-                               // Find the index of the first prediction
                                const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                               // If this payload is a prediction, return its value
-                               if (payload.isPrediction) {
+                               if (payload.isPrediction || (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1)) {
                                  return payload[parameter.key as keyof SensorData];
                                }
-                               // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
-                               if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
-                                 return payload[parameter.key as keyof SensorData];
-                               }
-                               // Otherwise, return null
                                return null;
                              }}
                              type="linear"
                              fill={`url(#predictionGradient)`} // Use prediction gradient fill
-                             stroke={chartConfig.prediction.color} // Prediction line color from config
-                             strokeWidth={2}
-                             strokeDasharray="5 5" // Dashed line for predictions
-                             dot={{ fill: chartConfig.prediction.color, r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color or black
-                             activeDot={false} // Usually disable active dot for predictions
-                             name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
+                             stroke="none" // No stroke for the fill area
                              isAnimationActive={false}
                              connectNulls={true} // Connect prediction points to each other and the last actual point
+                           />
+                            {/* Line for predicted data */}
+                           <Line
+                                key={`${parameter.key}-prediction-line`}
+                                dataKey={(payload: AnalysisResult, index: number) => {
+                                   const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                                   if (payload.isPrediction || (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1)) {
+                                       return payload[parameter.key as keyof SensorData];
+                                   }
+                                   return null;
+                                }}
+                                type="linear"
+                                stroke="#000000" // Black line
+                                strokeWidth={1.5} // Medium width
+                                strokeDasharray="5 5" // Dashed line for predictions
+                                dot={{ fill: chartConfig.prediction.color, r: 4, strokeWidth: 0 }} // Dots for predictions
+                                activeDot={false} // Usually disable active dot for predictions
+                                name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
+                                isAnimationActive={false}
+                                connectNulls={true} // Connect prediction points to each other and the last actual point
                            />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -1334,3 +1384,4 @@ export default function Home() {
     </div>
   );
 }
+
