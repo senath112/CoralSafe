@@ -6,7 +6,6 @@ import * as d3 from 'd3';
 
 interface DepthVisualizationProps {
   depth: number;
-  // suitabilityIndex is no longer needed for cone color, but can be kept if used elsewhere
 }
 
 const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
@@ -21,7 +20,7 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
   const coneBaseWidth = coneMaxHeight * 0.4; // Adjust base width proportion if needed
 
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || depth === undefined || depth === null) return;
 
     const svg = d3.select(ref.current);
     svg.selectAll("*").remove(); // Clear previous drawings
@@ -44,18 +43,24 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
       .attr("y1", "0%") // Starts at the top (0m)
       .attr("y2", "100%"); // Ends at the bottom (50m)
 
-    // Green (healthy) at the top (0m), fading to yellow/orange, then red (less healthy) at the bottom (50m)
+    // Gradient reflecting coral health vs depth
+    // Healthier (Green/Blue) near surface, less healthy (Yellow/Red) deeper
     gradient.append("stop")
-      .attr("offset", "0%")
-      .attr("stop-color", "hsl(120, 70%, 50%)"); // Green at 0m
+      .attr("offset", "0%") // 0m
+      .attr("stop-color", "hsl(180, 70%, 60%)"); // Light Blue/Cyan near surface
 
     gradient.append("stop")
-      .attr("offset", "50%")
-      .attr("stop-color", "hsl(45, 100%, 50%)"); // Yellow around 25m
+      .attr("offset", "25%") // ~12.5m
+      .attr("stop-color", "hsl(120, 60%, 50%)"); // Green mid-depth
 
     gradient.append("stop")
-      .attr("offset", "100%")
-      .attr("stop-color", "hsl(0, 70%, 50%)"); // Red at 50m
+      .attr("offset", "60%") // ~30m
+      .attr("stop-color", "hsl(45, 90%, 55%)"); // Yellow/Orange deeper
+
+    gradient.append("stop")
+      .attr("offset", "100%") // 50m
+      .attr("stop-color", "hsl(0, 70%, 50%)"); // Red at max depth scale
+
 
     // Draw the inverted cone with the depth gradient
     svg.append('polygon')
@@ -78,23 +83,23 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
     const markerX1 = width / 2 - markerWidth / 2;
     const markerX2 = width / 2 + markerWidth / 2;
 
-    // Draw the marker line
+    // Draw the marker line (WHITE STROKE)
     svg.append('line')
       .attr('x1', markerX1)
       .attr('y1', markerY)
       .attr('x2', markerX2)
       .attr('y2', markerY)
-      .attr('stroke', 'hsl(var(--foreground))') // Use foreground color for visibility
-      .attr('stroke-width', 2)
+      .attr('stroke', 'white') // Use white stroke as requested
+      .attr('stroke-width', 2.5) // Slightly thicker
       .attr('stroke-dasharray', '4 2'); // Make it dashed
 
     // Add depth label next to the marker line
     svg.append('text')
-      .attr('x', markerX2 + 5) // Position slightly to the right of the line
+      .attr('x', markerX2 + 6) // Position slightly to the right of the line
       .attr('y', markerY)
       .attr('dy', '0.35em') // Vertically center text
       .attr('text-anchor', 'start')
-      .attr('fill', 'hsl(var(--foreground))')
+      .attr('fill', 'hsl(var(--foreground))') // Use theme foreground for text
       .style('font-size', '12px')
       .style('font-weight', 'bold')
       .text(`${clampedDepth.toFixed(1)}m`);
@@ -130,3 +135,4 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
 };
 
 export default DepthVisualization;
+
