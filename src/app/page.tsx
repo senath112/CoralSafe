@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -42,7 +41,6 @@ import dynamic from 'next/dynamic'; // Import dynamic
 
 // Dynamically import visualization components to avoid SSR issues
 const DepthVisualization = dynamic(() => import('@/components/DepthVisualization'), { ssr: false });
-// Removed MapVisualization import
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
@@ -667,6 +665,11 @@ export default function Home() {
     }
   }, [sensorData, toast, analysisProgress, latitude, longitude, depth]);
 
+  // Get the latest suitability index for the depth visualization
+  const latestSuitabilityIndex = analysisResults.length > 0
+    ? analysisResults.filter(r => !r.isPrediction).slice(-1)[0]?.suitabilityIndex
+    : undefined;
+
 
   return (
     <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
@@ -1079,7 +1082,8 @@ export default function Home() {
                      {/* Depth Visualization */}
                      <div className="flex flex-col items-center">
                           <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
-                          <DepthVisualization depth={analyzedDepth} />
+                          {/* Pass the latest suitability index */}
+                          <DepthVisualization depth={analyzedDepth} suitabilityIndex={latestSuitabilityIndex} />
                       </div>
                  </CardContent>
              )}
@@ -1107,4 +1111,3 @@ export default function Home() {
     </div>
   );
 }
-
