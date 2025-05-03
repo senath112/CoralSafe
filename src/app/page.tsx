@@ -34,16 +34,15 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin } from 'lucide-react'; // Added MapPin
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin } from 'lucide-react'; // Keep MapPin for labels if desired
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
-import 'mapbox-gl/dist/mapbox-gl.css'; // Import Mapbox CSS
 
 
 // Dynamically import visualization components to avoid SSR issues
 const DepthVisualization = dynamic(() => import('@/components/DepthVisualization'), { ssr: false });
-const MapVisualization = dynamic(() => import('@/components/MapVisualization'), { ssr: false });
+// Removed MapVisualization import
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
@@ -117,6 +116,8 @@ export default function Home() {
 
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
+    let previousProgress = -1; // Track previous progress
+    let stuckStart = -1; // Time when progress first appeared stuck
 
     if (isLoading && startTime !== null) {
       intervalId = setInterval(() => {
@@ -130,11 +131,16 @@ export default function Home() {
 
           // Simple heuristic adjustment for potentially stuck progress
           let isStuck = false;
-          if (elapsed > 5000 && analysisProgress < 10) {
-             isStuck = true;
-             // Removed aggressive time multiplication as it can be inaccurate
-             // remainingTimeMs *= 2; // Double estimate if slow start
+          if (analysisProgress === previousProgress && elapsed > 5000) { // Stuck for 5s+
+             if (stuckStart === -1) stuckStart = now; // Mark when stuck started
+             if (now - stuckStart > 10000) { // Stuck for > 10 seconds
+                 isStuck = true;
+                 // Removed aggressive time multiplication
+             }
+          } else {
+             stuckStart = -1; // Reset stuck timer if progress moved
           }
+          previousProgress = analysisProgress; // Update previous progress
 
           const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
           const minutes = Math.floor(remainingSeconds / 60);
@@ -162,6 +168,8 @@ export default function Home() {
       }, 1000); // Check every second
     } else {
       setElapsedTime(0);
+      stuckStart = -1; // Reset stuck timer when not loading
+      previousProgress = -1;
       if (analysisProgress === 100 && !isLoading) { // Only show complete when not loading anymore
         setRemainingTimeText('Analysis complete!');
       } else if (!isLoading) { // Clear text if not loading and not complete
@@ -440,19 +448,24 @@ export default function Home() {
     let frameId: number | null = null;
     const updateProgressSmoothly = (targetProgress: number) => {
        // Ensure progress doesn't go backwards and stays within 0-100
-       targetProgress = Math.max(analysisProgress, Math.min(targetProgress, 100));
+       const currentProgress = analysisProgress; // Capture current state
+       const clampedTarget = Math.max(currentProgress, Math.min(targetProgress, 100));
 
       if (frameId) cancelAnimationFrame(frameId);
 
-      const animate = () => {
-        setAnalysisProgress(currentProgress => {
-          const diff = targetProgress - currentProgress;
+      const animate = (timestamp: number) => {
+        let startTimestamp: number | null = null;
+        if (!startTimestamp) startTimestamp = timestamp;
+        const elapsedAnim = timestamp - startTimestamp;
+
+        setAnalysisProgress(current => {
+          const diff = clampedTarget - current;
           if (Math.abs(diff) < 0.1) {
             frameId = null;
-            return targetProgress; // Snap to target if close
+            return clampedTarget; // Snap to target if close
           }
-          // Ease-out effect: move faster initially, then slower
-          const step = currentProgress + diff * 0.1;
+          // More gradual ease-out
+          const step = current + diff * 0.05; // Slower step
           frameId = requestAnimationFrame(animate);
           return step;
         });
@@ -1052,28 +1065,17 @@ export default function Home() {
           </Card>
         )}
 
-         {/* Map and Depth Visualization Section */}
+         {/* Location and Depth Visualization Section - Conditionally render */}
          <Card className={cn(
               "mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden",
-              !(analysisResults.length > 0 && analyzedLatitude && analyzedLongitude && analyzedDepth) && "hidden" // Hide card if no data or location/depth
+              !(analysisResults.length > 0 && analyzedLatitude !== null && analyzedLongitude !== null && analyzedDepth !== null) && "hidden" // Hide if no analysis or missing location/depth
          )}>
              <CardHeader>
                 <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm text-foreground">Map location and 3D visualization based on provided depth.</CardDescription>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Depth representation based on provided depth.</CardDescription>
              </CardHeader>
-             {/* Conditionally render content inside the card */}
-             {(analysisResults.length > 0 && analyzedLatitude && analyzedLongitude && analyzedDepth) && (
-                 <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                     {/* Map Visualization */}
-                     <div className="flex flex-col items-center">
-                          <h3 className="text-lg font-medium mb-2 text-foreground">Map Location</h3>
-                          <div className="w-full h-[300px] rounded-lg overflow-hidden shadow-md">
-                              <MapVisualization
-                                  latitude={analyzedLatitude}
-                                  longitude={analyzedLongitude}
-                              />
-                          </div>
-                      </div>
+             {(analysisResults.length > 0 && analyzedLatitude !== null && analyzedLongitude !== null && analyzedDepth !== null) && (
+                 <CardContent className="p-4 flex justify-center"> {/* Center content */}
                      {/* Depth Visualization */}
                      <div className="flex flex-col items-center">
                           <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
