@@ -38,6 +38,7 @@ import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Ga
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
+import { getLocationName } from '@/ai/flows/get-location-name'; // Import the new flow
 
 
 // Dynamically import visualization components to avoid SSR issues
@@ -111,6 +112,7 @@ export default function Home() {
   const [analyzedLatitude, setAnalyzedLatitude] = useState<number | null>(null);
   const [analyzedLongitude, setAnalyzedLongitude] = useState<number | null>(null);
   const [analyzedDepth, setAnalyzedDepth] = useState<number | null>(null);
+  const [identifiedLocationName, setIdentifiedLocationName] = useState<string | null>(null); // State for location name
 
 
    useEffect(() => {
@@ -431,6 +433,7 @@ export default function Home() {
     setAnalysisResults([]);
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
+    setIdentifiedLocationName(null); // Clear previous location name
     setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
@@ -474,8 +477,24 @@ export default function Home() {
 
 
     try {
+      // --- Get Location Name ---
+      updateProgressSmoothly(1);
+      try {
+        console.log(`Getting location name for Lat: ${latNum}, Lon: ${lonNum}`);
+        const locationResult = await getLocationName({ latitude: latNum, longitude: lonNum });
+        setIdentifiedLocationName(locationResult.locationName);
+        console.log("Identified location name:", locationResult.locationName);
+        toast({ title: 'Location Identified', description: `Location identified as: ${locationResult.locationName}` });
+      } catch (locationError: any) {
+        console.error("Error getting location name:", locationError);
+        setIdentifiedLocationName("Unknown Location"); // Set to unknown if error
+        toast({ title: 'Location Error', description: `Could not identify location name: ${locationError.message}`, variant: 'destructive' });
+      }
+      updateProgressSmoothly(5); // Location lookup complete
+
+
       console.log("Parsing sensor data...");
-      updateProgressSmoothly(5); // Start progress smoothly
+      // updateProgressSmoothly(5); // Start progress smoothly - Already done above
       await new Promise(resolve => setTimeout(resolve, 100)); // Simulate parsing time & allow UI update
       const parsedData = parseData(sensorData);
       console.log("Parsed data:", parsedData);
@@ -785,7 +804,10 @@ export default function Home() {
                 {(analyzedLatitude !== null && analyzedLongitude !== null && analyzedDepth !== null) && (
                     <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center flex-wrap">
                         <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
-                        <span className="mr-3 text-foreground">Lat: {analyzedLatitude.toFixed(4)}, Lon: {analyzedLongitude.toFixed(4)}</span>
+                         {identifiedLocationName && (
+                            <span className="mr-3 text-foreground">{identifiedLocationName}</span>
+                        )}
+                        <span className="mr-3 text-foreground">(Lat: {analyzedLatitude.toFixed(4)}, Lon: {analyzedLongitude.toFixed(4)})</span>
                         <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
                         <span className="text-foreground">Depth: {analyzedDepth}m</span>
                     </CardDescription>
