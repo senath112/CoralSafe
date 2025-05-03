@@ -1,13 +1,13 @@
 
 'use client';
 
-import {useState, useCallback, useRef, useEffect} from 'react';
-import {Button} from '@/components/ui/button';
-import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {Avatar, AvatarImage, AvatarFallback} from '@/components/ui/avatar';
-import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
-import {defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex} from '@/lib/utils';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex } from '@/lib/utils';
 import {
   ChartContainer,
   ChartTooltip,
@@ -16,11 +16,11 @@ import {
   ChartLegendContent,
 } from '@/components/ui/chart';
 import type { ChartConfig } from "@/components/ui/chart";
-import {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer} from 'recharts';
-import {Progress} from "@/components/ui/progress";
-import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "@/components/ui/accordion";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
+import { Progress } from "@/components/ui/progress";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs'; // Still needed for tf.dispose
-import {useToast} from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import {
   Table,
   TableHeader,
@@ -30,17 +30,21 @@ import {
   TableCell,
   TableCaption,
 } from "@/components/ui/table";
-import {jsPDF} from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge } from 'lucide-react';
-// Import functions from the new prediction model file
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, LogOut, History, Loader2 } from 'lucide-react';
+// Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
+import { useAuth } from '@/context/auth-context'; // Import useAuth hook
+import { auth, db } from '@/lib/firebase'; // Import auth and db
+import { signOut } from 'firebase/auth';
+import { collection, addDoc, query, where, getDocs, Timestamp, orderBy } from "firebase/firestore"; // Import Firestore functions
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
 export interface SensorData {
-  time: string;
+  time: string; // Keep as string initially
   location: string;
   waterTemperature: number;
   salinity: number;
@@ -58,36 +62,49 @@ export interface AnalysisResult extends SensorData {
   isPrediction?: boolean;
 }
 
+// Firestore document structure
+interface AnalysisRecord {
+    userId: string;
+    timestamp: Timestamp; // Use Firestore Timestamp
+    originalData: string; // Store the raw uploaded CSV
+    results: AnalysisResult[];
+}
+
+
 // Keep thresholds and parameters definition here or move to utils/config
 const sensorDataThresholds = defineSensorDataThresholds();
 
 const parameters = [
-  {name: 'Water Temperature', key: 'waterTemperature', unit: '°C', icon: Thermometer},
-  {name: 'Salinity', key: 'salinity', unit: 'PSU', icon: Waves},
-  {name: 'pH Level', key: 'pHLevel', unit: '', icon: Beaker},
-  {name: 'Dissolved Oxygen', key: 'dissolvedOxygen', unit: 'mg/L', icon: Wind},
-  {name: 'Turbidity', key: 'turbidity', unit: 'NTU', icon: CloudFog},
-  {name: 'Nitrate', key: 'nitrate', unit: 'mg/L', icon: Droplet},
+  { name: 'Water Temperature', key: 'waterTemperature', unit: '°C', icon: Thermometer },
+  { name: 'Salinity', key: 'salinity', unit: 'PSU', icon: Waves },
+  { name: 'pH Level', key: 'pHLevel', unit: '', icon: Beaker },
+  { name: 'Dissolved Oxygen', key: 'dissolvedOxygen', unit: 'mg/L', icon: Wind },
+  { name: 'Turbidity', key: 'turbidity', unit: 'NTU', icon: CloudFog },
+  { name: 'Nitrate', key: 'nitrate', unit: 'mg/L', icon: Droplet },
 ];
 
 const chartConfig: ChartConfig = {
-  waterTemperature: {label: "Water Temp (°C)", color: "hsl(var(--chart-1))", icon: Thermometer},
-  salinity: {label: "Salinity (PSU)", color: "hsl(var(--chart-2))", icon: Waves},
-  pHLevel: {label: "pH Level", color: "hsl(var(--chart-3))", icon: Beaker},
-  dissolvedOxygen: {label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind},
-  turbidity: {label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog},
-  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet}, // Use accent for nitrate line
-  prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>},
+  waterTemperature: { label: "Water Temp (°C)", color: "hsl(var(--chart-1))", icon: Thermometer },
+  salinity: { label: "Salinity (PSU)", color: "hsl(var(--chart-2))", icon: Waves },
+  pHLevel: { label: "pH Level", color: "hsl(var(--chart-3))", icon: Beaker },
+  dissolvedOxygen: { label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind },
+  turbidity: { label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog },
+  nitrate: { label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet }, // Use accent for nitrate line
+  prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
 } satisfies ChartConfig;
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuth(); // Get user and loading state
+  const router = useRouter();
   const [sensorData, setSensorData] = useState<string>('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
-  // Store the trained model and normalization parameters
   const [trainedModelInfo, setTrainedModelInfo] = useState<{ model: tf.Sequential; normParams: NormalizationParams } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
-  const {toast} = useToast();
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [historicalData, setHistoricalData] = useState<AnalysisRecord[]>([]);
+  const { toast } = useToast();
 
   const csvDataRef = useRef<string>('');
   const reportRef = useRef<HTMLDivElement>(null);
@@ -95,6 +112,14 @@ export default function Home() {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
+
+    // Redirect to auth page if not logged in and auth check is complete
+    useEffect(() => {
+      if (!authLoading && !user) {
+        router.push('/auth');
+      }
+    }, [user, authLoading, router]);
+
 
    useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -106,41 +131,41 @@ export default function Home() {
         setElapsedTime(elapsed);
 
         if (analysisProgress > 0 && analysisProgress < 100) {
-            const totalEstimatedTime = elapsed / (analysisProgress / 100);
-            let remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
+          const totalEstimatedTime = elapsed / (analysisProgress / 100);
+          let remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
 
-             // If progress hasn't changed much, it might be stuck, so adjust estimation
-             // This is a simple heuristic, might need refinement
-             if (elapsed > 5000 && analysisProgress < 10) { // If it's been 5s and progress is slow
-                remainingTimeMs *= 2; // Double the estimated remaining time
-             }
+          // If progress hasn't changed much, it might be stuck, so adjust estimation
+          // This is a simple heuristic, might need refinement
+          if (elapsed > 5000 && analysisProgress < 10) { // If it's been 5s and progress is slow
+            remainingTimeMs *= 2; // Double the estimated remaining time
+          }
 
-            const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
-            const minutes = Math.floor(remainingSeconds / 60);
-            const seconds = remainingSeconds % 60;
+          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+          const minutes = Math.floor(remainingSeconds / 60);
+          const seconds = remainingSeconds % 60;
 
-            if (remainingSeconds > 0) { // Only show if there's time remaining
-                if (minutes > 0) {
-                    setRemainingTimeText(`~${minutes}m ${seconds}s left`);
-                } else {
-                    setRemainingTimeText(`~${seconds}s left`);
-                }
+          if (remainingSeconds > 0) { // Only show if there's time remaining
+            if (minutes > 0) {
+              setRemainingTimeText(`~${minutes}m ${seconds}s left`);
             } else {
-                setRemainingTimeText('Finishing up...');
+              setRemainingTimeText(`~${seconds}s left`);
             }
+          } else {
+            setRemainingTimeText('Finishing up...');
+          }
         } else if (analysisProgress === 0) {
-            setRemainingTimeText('Starting analysis...');
+          setRemainingTimeText('Starting analysis...');
         } else { // analysisProgress is 100 or calculation yields 0 remaining
-             setRemainingTimeText('Finishing up...');
+          setRemainingTimeText('Finishing up...');
         }
       }, 1000); // Check every second
     } else {
       setElapsedTime(0);
-       if (analysisProgress === 100 && !isLoading) { // Only show complete when not loading anymore
-          setRemainingTimeText('Analysis complete!');
-       } else if (!isLoading) { // Clear text if not loading and not complete
-           setRemainingTimeText('');
-       }
+      if (analysisProgress === 100 && !isLoading) { // Only show complete when not loading anymore
+        setRemainingTimeText('Analysis complete!');
+      } else if (!isLoading) { // Clear text if not loading and not complete
+        setRemainingTimeText('');
+      }
     }
 
     return () => {
@@ -149,6 +174,111 @@ export default function Home() {
       }
     };
   }, [isLoading, startTime, analysisProgress]);
+
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: 'Logout Successful', description: 'You have been logged out.' });
+      router.push('/auth'); // Redirect to login page
+    } catch (error: any) {
+      console.error('Logout failed:', error);
+      toast({
+        title: 'Logout Failed',
+        description: error.message || 'Could not log out.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Function to save analysis results to Firestore
+  const saveAnalysis = async () => {
+    if (!user || analysisResults.length === 0 || !csvDataRef.current) {
+      toast({
+        title: 'Cannot Save',
+        description: 'No user logged in, no results to save, or original data is missing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const docRef = await addDoc(collection(db, "analysisRecords"), {
+        userId: user.uid,
+        timestamp: Timestamp.now(), // Use Firestore Timestamp
+        originalData: csvDataRef.current, // Save the raw CSV data
+        results: analysisResults, // Save the processed results
+      });
+      console.log("Document written with ID: ", docRef.id);
+      toast({
+        title: 'Analysis Saved',
+        description: 'Your analysis results have been saved successfully.',
+      });
+       // Optionally, refresh history after saving
+      // loadHistory();
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      toast({
+        title: 'Save Failed',
+        description: 'Could not save the analysis results.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to load historical data for the logged-in user
+    const loadHistory = async () => {
+        if (!user) {
+            toast({ title: 'Not Logged In', description: 'Please log in to view history.', variant: 'destructive' });
+            return;
+        }
+        setIsLoadingHistory(true);
+        setHistoricalData([]); // Clear previous history
+        try {
+            const q = query(
+                collection(db, "analysisRecords"),
+                where("userId", "==", user.uid),
+                orderBy("timestamp", "desc") // Order by most recent first
+            );
+            const querySnapshot = await getDocs(q);
+            const history: AnalysisRecord[] = [];
+            querySnapshot.forEach((doc) => {
+                 const data = doc.data() as Omit<AnalysisRecord, 'id'>; // Type cast, assuming id is handled separately if needed
+                 // Ensure timestamp is converted correctly if needed (it should be a Firestore Timestamp object)
+                 history.push({
+                     // id: doc.id, // Include doc id if you need it later
+                     ...data,
+                 });
+            });
+            setHistoricalData(history);
+             if (history.length === 0) {
+                toast({ title: 'No History Found', description: 'You have no saved analysis records yet.' });
+             } else {
+                 toast({ title: 'History Loaded', description: `Loaded ${history.length} analysis records.` });
+             }
+        } catch (e) {
+            console.error("Error loading history: ", e);
+            toast({
+                title: 'History Load Failed',
+                description: 'Could not load historical analysis data.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    };
+
+    // Function to apply a historical record's data to the current view
+    const applyHistoricalRecord = (record: AnalysisRecord) => {
+        setSensorData(record.originalData);
+        setAnalysisResults(record.results);
+        // Optionally scroll to top or results section
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+         toast({ title: 'Historical Data Applied', description: 'Showing selected analysis record.' });
+    };
+
 
 
   const downloadReport = () => {
@@ -168,29 +298,29 @@ export default function Home() {
     );
 
     elementsToColor.forEach(el => {
-        const elClasses = el.classList;
-        // Check if the element or any ancestor has background color classes
-        let hasBgClass = false;
-        let currentEl: HTMLElement | SVGElement | null = el as any; // Type assertion
-        while (currentEl && currentEl !== input) {
-             if (currentEl.classList && ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => currentEl.classList.contains(cls))) {
-                hasBgClass = true;
-                break;
-            }
-            currentEl = currentEl.parentElement as HTMLElement | SVGElement | null; // Cast parentElement
+      const elClasses = el.classList;
+      // Check if the element or any ancestor has background color classes
+      let hasBgClass = false;
+      let currentEl: HTMLElement | SVGElement | null = el as any; // Type assertion
+      while (currentEl && currentEl !== input) {
+        if (currentEl.classList && ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => currentEl.classList.contains(cls))) {
+          hasBgClass = true;
+          break;
         }
+        currentEl = currentEl.parentElement as HTMLElement | SVGElement | null; // Cast parentElement
+      }
 
 
-        if (!hasBgClass) {
-             originalColors.set(el, el.style.fill || el.style.color);
-             if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                 el.style.fill = 'black';
-                 el.style.color = ''; // Reset color if it was set
-             } else {
-                 el.style.color = 'black';
-                 el.style.fill = ''; // Reset fill if it was set
-             }
+      if (!hasBgClass) {
+        originalColors.set(el, el.style.fill || el.style.color);
+        if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+          el.style.fill = 'black';
+          el.style.color = ''; // Reset color if it was set
+        } else {
+          el.style.color = 'black';
+          el.style.fill = ''; // Reset fill if it was set
         }
+      }
     });
 
     const summaryTriggers = Array.from(input.querySelectorAll<HTMLButtonElement>('[data-summary-trigger]'));
@@ -201,12 +331,12 @@ export default function Home() {
     const originalStates = new Map<Element, string | null>();
 
     const setState = (elements: Element[], state: 'open' | 'closed') => {
-        elements.forEach(el => {
-            if (!originalStates.has(el)) {
-                originalStates.set(el, el.getAttribute('data-state'));
-            }
-            el.setAttribute('data-state', state);
-        });
+      elements.forEach(el => {
+        if (!originalStates.has(el)) {
+          originalStates.set(el, el.getAttribute('data-state'));
+        }
+        el.setAttribute('data-state', state);
+      });
     };
 
     // Default to expanded for PDF
@@ -217,76 +347,76 @@ export default function Home() {
 
     // Ensure accordion content is fully visible before capturing
     setTimeout(() => {
-        html2canvas(input, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff' // Force white background for PDF
-        })
+      html2canvas(input, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff' // Force white background for PDF
+      })
         .then((canvas) => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            let heightLeft = pdfHeight;
-            let position = 0;
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const imgProps = pdf.getImageProperties(imgData);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          let heightLeft = pdfHeight;
+          let position = 0;
 
-             pdf.addImage(imgData, 'PNG', 5, 5, pdfWidth - 10, pdfHeight - 10); // Add padding
-             heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
+          pdf.addImage(imgData, 'PNG', 5, 5, pdfWidth - 10, pdfHeight - 10); // Add padding
+          heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
 
-             while (heightLeft > 0) {
-                 position = heightLeft - (pdfHeight - 10); // Adjust position for padding
-                 pdf.addPage();
-                 pdf.addImage(imgData, 'PNG', 5, position - 5, pdfWidth - 10, pdfHeight - 10); // Add padding to subsequent pages
-                 heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
-             }
+          while (heightLeft > 0) {
+            position = heightLeft - (pdfHeight - 10); // Adjust position for padding
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 5, position - 5, pdfWidth - 10, pdfHeight - 10); // Add padding to subsequent pages
+            heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
+          }
 
-            pdf.save('coral_safe_report.pdf');
-            toast({
+          pdf.save('coral_safe_report.pdf');
+          toast({
             title: 'Success',
             description: 'Report downloaded successfully!',
-            });
+          });
         })
         .catch((error) => {
-            console.error('Error generating PDF:', error);
-            toast({
+          console.error('Error generating PDF:', error);
+          toast({
             title: 'Error',
             description: 'Failed to generate PDF. Please try again.',
             variant: 'destructive',
-            });
+          });
         })
         .finally(() => {
-            // Restore original colors
-             elementsToColor.forEach(el => {
-                 const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
-                 if (!hasBgClass) {
-                     const originalColor = originalColors.get(el);
-                     if (originalColor !== undefined) {
-                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                             el.style.fill = originalColor;
-                         } else {
-                             el.style.color = originalColor;
-                         }
-                     } else {
-                          // If no original color was stored, explicitly reset
-                         if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
-                             el.style.fill = '';
-                         } else {
-                             el.style.color = '';
-                         }
-                     }
-                 }
-            });
-
-            // Restore original accordion states
-            originalStates.forEach((state, el) => {
-                if (state) {
-                    el.setAttribute('data-state', state);
+          // Restore original colors
+          elementsToColor.forEach(el => {
+            const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
+            if (!hasBgClass) {
+              const originalColor = originalColors.get(el);
+              if (originalColor !== undefined) {
+                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                  el.style.fill = originalColor;
                 } else {
-                    el.removeAttribute('data-state');
+                  el.style.color = originalColor;
                 }
-            });
+              } else {
+                // If no original color was stored, explicitly reset
+                if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
+                  el.style.fill = '';
+                } else {
+                  el.style.color = '';
+                }
+              }
+            }
+          });
+
+          // Restore original accordion states
+          originalStates.forEach((state, el) => {
+            if (state) {
+              el.setAttribute('data-state', state);
+            } else {
+              el.removeAttribute('data-state');
+            }
+          });
         });
     }, 150); // Slightly increased timeout for rendering
   };
@@ -296,8 +426,8 @@ export default function Home() {
     console.log("Parsing data...");
     const lines = data.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     if (lines.length < 2) {
-        console.warn("No data rows found after header.");
-        return [];
+      console.warn("No data rows found after header.");
+      return [];
     }
     // Assuming the first line is the header and skipping it
     const headerLine = lines[0].toLowerCase();
@@ -307,13 +437,13 @@ export default function Home() {
     const expectedHeaders = ['date', 'location', 'water_temperature_c', 'salinity_psu', 'ph_level', 'dissolved_oxygen_mg_l', 'turbidity_ntu', 'nitrate_mg_l'];
     const actualHeaders = headerLine.split(',').map(h => h.trim());
     if (actualHeaders.length !== expectedHeaders.length || !expectedHeaders.every((h, i) => actualHeaders[i].includes(h))) {
-        console.warn("CSV header doesn't match expected format exactly. Proceeding, but results might be inaccurate. Expected:", expectedHeaders, "Got:", actualHeaders);
-        // Consider throwing an error or showing a toast if strict format is required
-         // toast({
-         //   title: 'Warning',
-         //   description: 'CSV header format seems incorrect. Analysis might be inaccurate.',
-         //   variant: 'destructive', // Use destructive variant for warnings? Or create a 'warning' variant
-         // });
+      console.warn("CSV header doesn't match expected format exactly. Proceeding, but results might be inaccurate. Expected:", expectedHeaders, "Got:", actualHeaders);
+      // Consider throwing an error or showing a toast if strict format is required
+      // toast({
+      //   title: 'Warning',
+      //   description: 'CSV header format seems incorrect. Analysis might be inaccurate.',
+      //   variant: 'destructive', // Use destructive variant for warnings? Or create a 'warning' variant
+      // });
     }
 
 
@@ -321,7 +451,7 @@ export default function Home() {
       console.log(`Parsing line ${index + 2}: ${entry}`); // Line number includes header
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== expectedHeaders.length) {
-         console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
+        console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
         return null;
       }
 
@@ -343,7 +473,7 @@ export default function Home() {
         isNaN(turbidityNum) ||
         isNaN(nitrateNum)
       ) {
-         console.warn(`Skipping entry with invalid or missing values (line ${index + 2}): ${entry}`);
+        console.warn(`Skipping entry with invalid or missing values (line ${index + 2}): ${entry}`);
         return null;
       }
 
@@ -362,16 +492,16 @@ export default function Home() {
     return parsedEntries;
   };
 
- const analyzeData = async () => {
+  const analyzeData = async () => {
     console.log("analyzeData function called.");
     console.log("Current sensor data state:", sensorData);
     if (!sensorData.trim()) {
       console.log("Sensor data is empty. Aborting analysis.");
-       toast({
-         title: 'Input Error',
-         description: 'Please paste sensor data before analyzing.',
-         variant: 'destructive',
-       });
+      toast({
+        title: 'Input Error',
+        description: 'Please paste sensor data before analyzing.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -382,7 +512,7 @@ export default function Home() {
     setTrainedModelInfo(null); // Clear previous model
     setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
-    csvDataRef.current = sensorData;
+    csvDataRef.current = sensorData; // Store raw CSV data for saving
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
     let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
@@ -390,247 +520,288 @@ export default function Home() {
     // Use requestAnimationFrame for smoother progress updates
     let frameId: number | null = null;
     const updateProgressSmoothly = (targetProgress: number) => {
-        if (frameId) cancelAnimationFrame(frameId);
+      if (frameId) cancelAnimationFrame(frameId);
 
-        const animate = () => {
-            setAnalysisProgress(currentProgress => {
-                const diff = targetProgress - currentProgress;
-                if (Math.abs(diff) < 0.1) {
-                    frameId = null;
-                    return targetProgress; // Snap to target if close
-                }
-                // Ease-out effect: move faster initially, then slower
-                const step = currentProgress + diff * 0.1;
-                frameId = requestAnimationFrame(animate);
-                return step;
-            });
-        };
-        frameId = requestAnimationFrame(animate);
+      const animate = () => {
+        setAnalysisProgress(currentProgress => {
+          const diff = targetProgress - currentProgress;
+          if (Math.abs(diff) < 0.1) {
+            frameId = null;
+            return targetProgress; // Snap to target if close
+          }
+          // Ease-out effect: move faster initially, then slower
+          const step = currentProgress + diff * 0.1;
+          frameId = requestAnimationFrame(animate);
+          return step;
+        });
+      };
+      frameId = requestAnimationFrame(animate);
     };
 
 
     try {
-        console.log("Parsing sensor data...");
-        updateProgressSmoothly(5); // Start progress smoothly
-        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate parsing time & allow UI update
-        const parsedData = parseData(sensorData);
-        console.log("Parsed data:", parsedData);
+      console.log("Parsing sensor data...");
+      updateProgressSmoothly(5); // Start progress smoothly
+      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate parsing time & allow UI update
+      const parsedData = parseData(sensorData);
+      console.log("Parsed data:", parsedData);
 
-        if (!parsedData || parsedData.length === 0) {
-            console.log("No valid data after parsing.");
-            toast({
-                title: 'Error',
-                description: 'No valid data found or data format is incorrect. Check headers and numeric values.',
-                variant: 'destructive',
-            });
-            setIsLoading(false);
-            setStartTime(null);
-            setAnalysisProgress(0); // Reset progress on error
-            setRemainingTimeText(''); // Clear time text
-            return;
-        }
-        updateProgressSmoothly(10); // Parsing complete
-
-        // --- Train Model ---
-        console.log("Training model using prediction-model.ts...");
-        updateProgressSmoothly(15); // Start training progress
-        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
-
-        const trainingStartTime = Date.now(); // Track training time separately
-        trainingResult = await trainPredictionModel(parsedData, (epochProgress) => {
-            // Update progress based on training epochs (15% to 45%)
-             updateProgressSmoothly(15 + Math.floor(epochProgress * 30));
-        });
-        const trainingEndTime = Date.now();
-        console.log(`Model training took ${(trainingEndTime - trainingStartTime) / 1000}s`);
-
-        setTrainedModelInfo(trainingResult); // Save the trained model and norm params
-        if (trainingResult) {
-            normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
-        }
-        console.log("Model training finished. Training result:", trainingResult);
-        updateProgressSmoothly(45); // Training complete
-
-        // --- Analyze Data Points ---
-        console.log("Analyzing each data point for suitability...");
-         updateProgressSmoothly(50); // Start analysis progress
-         await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
-
-         const analysisStartTime = Date.now();
-         let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
-            console.log(`Analyzing data point ${index}:`, data);
-            const {isSuitable, summary, threateningFactors} = analyzeSensorData(
-                data,
-                sensorDataThresholds
-            );
-            const suitabilityIndex = calculateSuitabilityIndex(data, sensorDataThresholds);
-             console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
-
-             let improvements: string[] = [];
-             if (isSuitable === false) {
-                 // Get specific threatening factors first
-                 const specificThreats = Object.entries(threateningFactors)
-                     .filter(([_, value]) => value)
-                     .map(([key]) => {
-                         switch(key) {
-                             case 'temperature': return "Address high/low water temperature issues.";
-                             case 'salinity': return "Investigate and mitigate salinity fluctuations.";
-                             case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
-                             case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
-                             case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
-                             case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
-                             default: return `Address issues related to ${key}.`;
-                         }
-                     });
-
-                if (specificThreats.length > 0) {
-                    improvements = specificThreats;
-                } else {
-                     // If isSuitable is false but no specific *threatening* factors, it means multiple cautions pushed it over
-                     const cautions = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
-                     if (cautions && cautions[1]) {
-                         improvements = [`Multiple parameters are in caution ranges (${cautions[1]}), contributing to overall unsuitability. Review all parameters.`];
-                     } else {
-                          improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
-                     }
-                }
-
-            } else if (isSuitable === true) {
-                 // Check for cautions even if suitable overall
-                 const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
-                 if (cautions) {
-                     improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
-                 } else {
-                     improvements = ["Environment appears ideal, continue monitoring."];
-                 }
-            } else { // isSuitable is null (should not happen with current logic, but handle defensively)
-                 improvements = ["Could not determine specific actions."];
-            }
-
-
-            // Update progress during analysis (50% to 75%)
-            const currentTargetProgress = 50 + Math.floor(((index + 1) / parsedData.length) * 25);
-            updateProgressSmoothly(currentTargetProgress);
-
-
-            return {
-                ...data,
-                isSuitable,
-                summary,
-                improvements, // Now an array of strings
-                suitabilityIndex,
-                isPrediction: false,
-            };
-        });
-         const analysisEndTime = Date.now();
-         console.log(`Data point analysis took ${(analysisEndTime - analysisStartTime) / 1000}s`);
-         console.log("Finished suitability analysis for all data points.");
-         updateProgressSmoothly(75); // Analysis complete
-
-        // --- Generate Predictions ---
-        if (trainingResult) {
-            console.log("Generating predictions using prediction-model.ts...");
-            updateProgressSmoothly(80); // Start prediction progress
-            await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start
-
-            const predictionStartTime = Date.now();
-            const numPredictions = 5;
-            // Pass the model, normParams, and the already analyzed results
-            const predictedResults = await generatePredictions(
-                trainingResult.model,
-                trainingResult.normParams,
-                detailedResults, // Pass the current results array for sequential prediction
-                numPredictions,
-                (predictionProgress) => {
-                    // Update progress during prediction (80% to 100%)
-                     updateProgressSmoothly(80 + Math.floor(predictionProgress * 20));
-                }
-            );
-            const predictionEndTime = Date.now();
-            console.log(`Predictions took ${(predictionEndTime - predictionStartTime) / 1000}s`);
-
-            // Combine original analyzed results with new predictions
-             detailedResults = [...detailedResults, ...predictedResults];
-
-             console.log("Finished predictions.");
-        } else {
-             console.log("Model training failed or skipped. No predictions will be made.");
-             toast({
-                 title: "Prediction Skipped",
-                 description: "Model training failed or was skipped, so predictions could not be made.",
-                 variant: "destructive", // Consider a less alarming variant?
-             });
-             // If skipping predictions, jump progress to 100
-             updateProgressSmoothly(100);
-        }
-
-        // Final state updates after all async operations
-        updateProgressSmoothly(100); // Ensure progress reaches 100%
-        console.log("Final analysis results (including predictions):", detailedResults);
-        setAnalysisResults(detailedResults);
+      if (!parsedData || parsedData.length === 0) {
+        console.log("No valid data after parsing.");
         toast({
-            title: 'Success',
-            description: 'Data analyzed and predictions generated successfully!',
+          title: 'Error',
+          description: 'No valid data found or data format is incorrect. Check headers and numeric values.',
+          variant: 'destructive',
         });
-
-    } catch (error: any) {
-        console.error('Error during analysis:', error);
-        toast({
-            title: 'Error',
-            description: `An error occurred: ${error.message}. Check console for details.`,
-            variant: 'destructive',
-        });
-        setAnalysisProgress(0); // Reset progress on error
-        setRemainingTimeText(''); // Clear time text
-    } finally {
-         if (frameId) cancelAnimationFrame(frameId); // Clean up animation frame
-         // Dispose the normalization parameter tensors AFTER analysis and predictions
-         if (normParamsToDispose) {
-            tf.dispose([normParamsToDispose.min, normParamsToDispose.max]);
-            console.log("Disposed normalization parameter tensors.");
-         } else {
-             console.warn("Normalization parameters were null or model training failed, cannot dispose.");
-         }
-        console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
         setStartTime(null);
-        // Ensure progress is 100% visually after loading stops
-        setAnalysisProgress(100);
+        setAnalysisProgress(0); // Reset progress on error
+        setRemainingTimeText(''); // Clear time text
+        return;
+      }
+      updateProgressSmoothly(10); // Parsing complete
+
+      // --- Train Model ---
+      console.log("Training model using prediction-model.ts...");
+      updateProgressSmoothly(15); // Start training progress
+      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
+
+      const trainingStartTime = Date.now(); // Track training time separately
+      trainingResult = await trainPredictionModel(parsedData, (epochProgress) => {
+        // Update progress based on training epochs (15% to 45%)
+        updateProgressSmoothly(15 + Math.floor(epochProgress * 30));
+      });
+      const trainingEndTime = Date.now();
+      console.log(`Model training took ${(trainingEndTime - trainingStartTime) / 1000}s`);
+
+      setTrainedModelInfo(trainingResult); // Save the trained model and norm params
+      if (trainingResult) {
+        normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
+      }
+      console.log("Model training finished. Training result:", trainingResult);
+      updateProgressSmoothly(45); // Training complete
+
+      // --- Analyze Data Points ---
+      console.log("Analyzing each data point for suitability...");
+      updateProgressSmoothly(50); // Start analysis progress
+      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
+
+      const analysisStartTime = Date.now();
+      let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
+        console.log(`Analyzing data point ${index}:`, data);
+        const { isSuitable, summary, threateningFactors } = analyzeSensorData(
+          data,
+          sensorDataThresholds
+        );
+        const suitabilityIndex = calculateSuitabilityIndex(data, sensorDataThresholds);
+        console.log(`Analysis for point ${index}: Suitable - ${isSuitable}, Index - ${suitabilityIndex}`);
+
+        let improvements: string[] = [];
+        if (isSuitable === false) {
+          // Get specific threatening factors first
+          const specificThreats = Object.entries(threateningFactors)
+            .filter(([_, value]) => value)
+            .map(([key]) => {
+              switch (key) {
+                case 'temperature': return "Address high/low water temperature issues.";
+                case 'salinity': return "Investigate and mitigate salinity fluctuations.";
+                case 'pHLevel': return "Monitor and address pH imbalances (acidification).";
+                case 'dissolvedOxygen': return "Improve water circulation or reduce oxygen consumption sources.";
+                case 'turbidity': return "Reduce sediment runoff or sources of water cloudiness.";
+                case 'nitrate': return "Control nutrient inputs from runoff or pollution.";
+                default: return `Address issues related to ${key}.`;
+              }
+            });
+
+          if (specificThreats.length > 0) {
+            improvements = specificThreats;
+          } else {
+            // If isSuitable is false but no specific *threatening* factors, it means multiple cautions pushed it over
+            const cautionsMatch = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
+            if (cautionsMatch && cautionsMatch[1]) {
+              improvements = [`Multiple parameters are in caution ranges (${cautionsMatch[1]}), contributing to overall unsuitability. Review all parameters.`];
+            } else {
+              improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
+            }
+          }
+
+        } else if (isSuitable === true) {
+          // Check for cautions even if suitable overall
+          const hasCautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
+          if (hasCautions) {
+            improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
+          } else {
+            improvements = ["Environment appears ideal, continue monitoring."];
+          }
+        } else { // isSuitable is null (should not happen with current logic, but handle defensively)
+          improvements = ["Could not determine specific actions."];
+        }
+
+
+        // Update progress during analysis (50% to 75%)
+        const currentTargetProgress = 50 + Math.floor(((index + 1) / parsedData.length) * 25);
+        updateProgressSmoothly(currentTargetProgress);
+
+
+        return {
+          ...data,
+          isSuitable,
+          summary,
+          improvements, // Now an array of strings
+          suitabilityIndex,
+          isPrediction: false,
+        };
+      });
+      const analysisEndTime = Date.now();
+      console.log(`Data point analysis took ${(analysisEndTime - analysisStartTime) / 1000}s`);
+      console.log("Finished suitability analysis for all data points.");
+      updateProgressSmoothly(75); // Analysis complete
+
+      // --- Generate Predictions ---
+      if (trainingResult) {
+        console.log("Generating predictions using prediction-model.ts...");
+        updateProgressSmoothly(80); // Start prediction progress
+        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start
+
+        const predictionStartTime = Date.now();
+        const numPredictions = 5;
+        // Pass the model, normParams, and the already analyzed results
+        const predictedResults = await generatePredictions(
+          trainingResult.model,
+          trainingResult.normParams,
+          detailedResults, // Pass the current results array for sequential prediction
+          numPredictions,
+          (predictionProgress) => {
+            // Update progress during prediction (80% to 100%)
+            updateProgressSmoothly(80 + Math.floor(predictionProgress * 20));
+          }
+        );
+        const predictionEndTime = Date.now();
+        console.log(`Predictions took ${(predictionEndTime - predictionStartTime) / 1000}s`);
+
+        // Combine original analyzed results with new predictions
+        detailedResults = [...detailedResults, ...predictedResults];
+
+        console.log("Finished predictions.");
+      } else {
+        console.log("Model training failed or skipped. No predictions will be made.");
+        toast({
+          title: "Prediction Skipped",
+          description: "Model training failed or was skipped, so predictions could not be made.",
+          variant: "destructive", // Consider a less alarming variant?
+        });
+        // If skipping predictions, jump progress to 100
+        updateProgressSmoothly(100);
+      }
+
+      // Final state updates after all async operations
+      updateProgressSmoothly(100); // Ensure progress reaches 100%
+      console.log("Final analysis results (including predictions):", detailedResults);
+      setAnalysisResults(detailedResults);
+      toast({
+        title: 'Success',
+        description: 'Data analyzed and predictions generated successfully!',
+      });
+
+    } catch (error: any) {
+      console.error('Error during analysis:', error);
+      toast({
+        title: 'Error',
+        description: `An error occurred: ${error.message}. Check console for details.`,
+        variant: 'destructive',
+      });
+      setAnalysisProgress(0); // Reset progress on error
+      setRemainingTimeText(''); // Clear time text
+    } finally {
+      if (frameId) cancelAnimationFrame(frameId); // Clean up animation frame
+      // Dispose the normalization parameter tensors AFTER analysis and predictions
+      if (normParamsToDispose) {
+        tf.dispose([normParamsToDispose.min, normParamsToDispose.max]);
+        console.log("Disposed normalization parameter tensors.");
+      } else {
+        console.warn("Normalization parameters were null or model training failed, cannot dispose.");
+      }
+      console.log("Analysis process finished. Setting loading state to false.");
+      setIsLoading(false);
+      setStartTime(null);
+      // Ensure progress is 100% visually after loading stops
+      setAnalysisProgress(100);
     }
-};
+  };
+
+    // Render loading state or null if not authenticated
+    if (authLoading || !user) {
+      return ( // Keep showing loader until auth check is done or redirect happens
+          <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500">
+              <Loader2 className="h-16 w-16 animate-spin text-white" />
+          </div>
+      );
+    }
 
 
   return (
     <div ref={reportRef} className="flex flex-col items-center justify-start min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-300 via-blue-400 to-teal-500 text-foreground">
 
       {/* Header Section */}
-      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm">
-         <div className="flex items-center justify-center mb-2">
+      <header className="w-full max-w-5xl mb-8 text-center text-white shadow-lg p-4 rounded-lg bg-black/30 backdrop-blur-sm flex justify-between items-center">
+         <div className="flex items-center justify-center">
             <Fish className="w-10 h-10 mr-3 text-cyan-300 animate-pulse" />
-            <h1 className="text-4xl font-bold">CoralGuard</h1>
+            <div>
+                 <h1 className="text-4xl font-bold">CoralGuard</h1>
+                 <p className="text-lg text-cyan-100">V2.0 - Mariana</p>
+                 <p className="mt-1 text-xs text-blue-200">
+                   Made with love by Senath Sethmika
+                 </p>
+            </div>
           </div>
-        <p className="text-lg text-cyan-100">V2.0 - Mariana</p>
-        <p className="mt-4 text-sm text-blue-200">
-          Made with love by Senath Sethmika
-        </p>
-        {/* Removed social media links */}
+         {/* Logout Button */}
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/20"
+          >
+            <LogOut className="w-4 h-4 mr-2" /> Logout
+          </Button>
       </header>
 
       <div className="max-w-7xl w-full space-y-8">
-        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
-           <CardHeader>
-             <div className="flex items-center mb-4">
-               <Avatar>
-                 <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
-                 <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
-               </Avatar>
-                 <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
-             </div>
+         {/* Save/Load Buttons */}
+          <div className="flex justify-end space-x-2 mb-4">
+              <Button
+                  onClick={saveAnalysis}
+                  disabled={isSaving || analysisResults.length === 0}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                  size="sm"
+              >
+                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <History className="w-4 h-4 mr-2" />}
+                  {isSaving ? 'Saving...' : 'Save Analysis'}
+              </Button>
+               <Button
+                    onClick={loadHistory}
+                    disabled={isLoadingHistory}
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                    size="sm"
+                >
+                    {isLoadingHistory ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <History className="w-4 h-4 mr-2" />}
+                    {isLoadingHistory ? 'Loading...' : 'Load History'}
+                </Button>
+          </div>
 
-            <CardDescription className="text-muted-foreground text-sm">
-              <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
-              <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
-            </CardDescription>
+        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30">
+          <CardHeader>
+            <div className="flex items-center mb-4">
+              <Avatar>
+                <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
+                <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
+              </Avatar>
+              <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
+            </div>
+
+             <CardDescription className="text-muted-foreground text-sm">
+               <div className="font-medium mb-1 text-foreground">Paste your CSV sensor data below.</div>
+               <div className="text-foreground">Expected Format: <code className="bg-black/20 px-1 py-0.5 rounded text-xs">Date,Location,Water_Temperature_C,Salinity_PSU,pH_Level,Dissolved_Oxygen_mg_L,Turbidity_NTU,Nitrate_mg_L</code></div>
+             </CardDescription>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -647,53 +818,98 @@ export default function Home() {
               disabled={isLoading || !sensorData.trim()}
               className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
             >
-              <Activity className="w-5 h-5 mr-2"/> {isLoading ? 'Analyzing...' : 'Analyze Data'}
+              <Activity className="w-5 h-5 mr-2" /> {isLoading ? 'Analyzing...' : 'Analyze Data'}
             </Button>
-             {isLoading && (
-                 <div className="w-full px-4 mt-4">
-                     <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-foreground mt-2"> {/* Changed to text-foreground */}
-                        Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
-                     </p>
-                 </div>
-             )}
+            {isLoading && (
+              <div className="w-full px-4 mt-4">
+                <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
+                <p className="text-center text-sm text-foreground mt-2"> {/* Changed to text-foreground */}
+                  Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
+         {/* Historical Data Display */}
+          {historicalData.length > 0 && (
+                <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                    <CardHeader>
+                        <CardTitle className="text-xl font-semibold text-foreground">Analysis History</CardTitle>
+                         <CardDescription className="text-foreground">Select a record to view its analysis.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0 max-h-60 overflow-y-auto">
+                        <Table>
+                            <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
+                                <TableRow>
+                                    <TableHead className="text-foreground">Date Saved</TableHead>
+                                    <TableHead className="text-foreground">Location(s)</TableHead>
+                                    <TableHead className="text-foreground">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {historicalData.map((record, index) => {
+                                    // Extract unique locations from the results
+                                     const locations = [...new Set(record.results.map(r => r.location))].join(', ') || 'N/A';
+                                     // Format timestamp
+                                     const dateSaved = record.timestamp?.toDate()?.toLocaleString() ?? 'N/A';
+                                    return (
+                                        <TableRow key={index} className="hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10">
+                                            <TableCell className="text-foreground">{dateSaved}</TableCell>
+                                            <TableCell className="text-foreground">{locations}</TableCell>
+                                             <TableCell>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => applyHistoricalRecord(record)}
+                                                    className="border-cyan-500 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-600"
+                                                >
+                                                    View
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
 
-      {/* Analysis Results Table */}
-      {analysisResults.length > 0 && (
+
+        {/* Analysis Results Table */}
+        {analysisResults.length > 0 && (
           <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
-                 <Button
-                    onClick={downloadReport}
-                    className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
-                    size="sm"
-                 >
-                    <Gauge className="w-4 h-4 mr-2"/> Download Report (PDF)
-                 </Button>
+              <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
+              <Button
+                onClick={downloadReport}
+                className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
+                size="sm"
+              >
+                <Gauge className="w-4 h-4 mr-2" /> Download Report (PDF)
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-              <Table className="min-w-full">
-                <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
-                  <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead>
-                    <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead>
-                    <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead>
-                    <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {analysisResults.map((result, index) => {
+                <Table className="min-w-full">
+                  <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Time</TableHead>
+                      <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Location</TableHead>
+                      <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Suitability</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Water Temp (°C)</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Salinity (PSU)</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">pH Level</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Oxygen (mg/L)</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Turbidity (NTU)</TableHead>
+                      <TableHead className="text-right font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Nitrate (mg/L)</TableHead>
+                      <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Summary</TableHead>
+                      <TableHead className="text-left font-medium py-3 px-4 text-foreground">Suggested Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analysisResults.map((result, index) => {
                       const isPrediction = result.isPrediction === true; // More robust check
                       let suitabilityClass = '';
                       let suitabilityText = '';
@@ -701,44 +917,44 @@ export default function Home() {
 
 
                       if (isPrediction) {
-                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
-                          suitabilityText = 'Prediction';
-                          suitabilityIndexText = '';
+                        suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+                        suitabilityText = 'Prediction';
+                        suitabilityIndexText = '';
                       } else {
-                           // Use the calculated suitabilityIndex for coloring
-                            if (result.suitabilityIndex === undefined) {
-                                // Fallback if index somehow isn't calculated
-                                suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
-                                suitabilityText = 'Unknown';
-                           } else if (result.suitabilityIndex >= 80) { // Ideal
-                               suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
-                               suitabilityText = 'Suitable';
-                           } else if (result.suitabilityIndex >= 50) { // Warning/Caution
-                               suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
-                               suitabilityText = 'Warning';
-                           } else { // Threatening
-                               suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
-                               suitabilityText = 'Threatening';
-                           }
-                       }
+                        // Use the calculated suitabilityIndex for coloring
+                        if (result.suitabilityIndex === undefined) {
+                          // Fallback if index somehow isn't calculated
+                          suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+                          suitabilityText = 'Unknown';
+                        } else if (result.suitabilityIndex >= 80) { // Ideal
+                          suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
+                          suitabilityText = 'Suitable';
+                        } else if (result.suitabilityIndex >= 50) { // Warning/Caution
+                          suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
+                          suitabilityText = 'Warning';
+                        } else { // Threatening
+                          suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
+                          suitabilityText = 'Threatening';
+                        }
+                      }
 
 
-                    return (
-                      <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell>
-                        <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell>
-                        <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
-                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
-                                {suitabilityText} {suitabilityIndexText}
+                      return (
+                        <TableRow key={index} className="border-b border-cyan-200/30 dark:border-cyan-700/30 last:border-0 hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150">
+                          <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.time}</TableCell>
+                          <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.location}</TableCell>
+                          <TableCell className={`py-2 text-center border-r border-cyan-200/30 dark:border-cyan-700/30 px-4`}>
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium shadow-sm ${suitabilityClass}`}>
+                              {suitabilityText} {suitabilityIndexText}
                             </span>
-                        </TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell>
-                        <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell>
-                         <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
+                          </TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.waterTemperature.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.salinity.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.pHLevel.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.dissolvedOxygen.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.turbidity.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 text-right border-r border-cyan-200/30 dark:border-cyan-700/30 px-4 text-foreground">{result.nitrate.toFixed(2)}</TableCell>
+                          <TableCell className="py-2 border-r border-cyan-200/30 dark:border-cyan-700/30 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value={`summary-${index}`} className="border-b-0">
                                 <AccordionTrigger data-summary-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View</AccordionTrigger>
@@ -747,206 +963,207 @@ export default function Home() {
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>
-                        </TableCell>
-                         <TableCell className="py-2 px-4">
+                          </TableCell>
+                          <TableCell className="py-2 px-4">
                             <Accordion type="single" collapsible className="w-full">
                               <AccordionItem value={`actions-${index}`} className="border-b-0">
                                 <AccordionTrigger data-actions-trigger className="py-1 text-xs hover:no-underline [&>svg]:text-cyan-500 text-foreground">View Actions</AccordionTrigger>
                                 <AccordionContent data-actions-content>
-                                   <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
-                                       {result.improvements && result.improvements.length > 0 ? (
-                                            result.improvements.map((improvement, i) => (
-                                                <li key={i}>{improvement}</li>
-                                             ))
-                                        ) : (
-                                            <li>{(isPrediction) ? 'N/A for predictions' : 'No specific actions suggested.'}</li>
-                                        )}
-                                   </ul>
+                                  <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
+                                    {result.improvements && result.improvements.length > 0 ? (
+                                      result.improvements.map((improvement, i) => (
+                                        <li key={i}>{improvement}</li>
+                                      ))
+                                    ) : (
+                                      <li>{(isPrediction) ? 'N/A for predictions' : 'No specific actions suggested.'}</li>
+                                    )}
+                                  </ul>
                                 </AccordionContent>
                               </AccordionItem>
                             </Accordion>
                           </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
-      )}
+        )}
 
         {/* Charts Section */}
         {analysisResults.length > 0 && (
-            <Accordion type="multiple" className="w-full space-y-4">
-                {parameters.map((parameter) => (
-                     <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
-                        <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                            <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
-                                <div className="flex items-center">
-                                    <parameter.icon className="w-5 h-5 mr-2 text-cyan-500"/>
-                                    {parameter.name} Trends
-                                </div>
-                            </AccordionTrigger>
-                             <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
-                                <p className="text-sm text-muted-foreground mb-4 text-foreground">
-                                    Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
-                                </p>
-                                <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart
-                                          data={analysisResults}
-                                          margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
-                                        >
-                                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} padding={{left: 10, right: 10}}/>
-                                          <YAxis stroke="hsl(var(--foreground))" tick={{fontSize: 12, fill: 'hsl(var(--foreground))'}} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
-                                           <RechartsTooltip
-                                                content={
-                                                    <ChartTooltipContent
-                                                        indicator="dot"
-                                                        labelClassName="text-sm font-medium text-foreground"
-                                                        className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
-                                                    />
-                                                }
-                                                 cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
-                                            />
-                                           <RechartsLegend content={ <ChartLegendContent
-                                                payload={
-                                                    Object.entries(chartConfig)
-                                                    .filter(([key]) => key === parameter.key || key === 'prediction') // Filter relevant keys
-                                                    .map(([key, config]) => ({
-                                                        value: config.label,
-                                                        type: key === 'prediction' ? 'dashed' : 'line',
-                                                        id: key,
-                                                        // Use parameter color for actual data, prediction color for predictions
-                                                        color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color,
-                                                        icon: config.icon
-                                                    }))
-                                                }
-                                                className="text-foreground" // Ensure legend text is visible
-                                             /> }
-                                            />
-                                          {/* Line for actual data */}
-                                          <Line
-                                            key={`${parameter.key}-actual`}
-                                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]}
-                                            type="linear"
-                                            stroke={'#000000'} // Black line for actual data
-                                            strokeWidth={2}
-                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 4, strokeWidth: 0 }} // Use parameter color for dots, increased size
-                                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || '#8884d8', stroke: '#000000' }} // Active dot styling
-                                            name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
-                                            isAnimationActive={false}
-                                            connectNulls={false} // Do not connect across the prediction boundary
-                                          />
-                                           {/* Line for predicted data */}
-                                           <Line
-                                                key={`${parameter.key}-prediction`}
-                                                dataKey={(payload: AnalysisResult, index: number) => {
-                                                    // Find the index of the first prediction
-                                                    const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                                                    // If this payload is a prediction, return its value
-                                                    if (payload.isPrediction) {
-                                                        return payload[parameter.key as keyof AnalysisResult];
-                                                    }
-                                                    // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
-                                                    if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
-                                                        return payload[parameter.key as keyof AnalysisResult];
-                                                    }
-                                                    // Otherwise, return null
-                                                    return null;
-                                                }}
-                                                type="linear"
-                                                stroke={chartConfig.prediction.color} // Prediction line color from config
-                                                strokeWidth={2}
-                                                strokeDasharray="5 5" // Dashed line for predictions
-                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color
-                                                activeDot={false} // Usually disable active dot for predictions
-                                                name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
-                                                isAnimationActive={false}
-                                                connectNulls={true} // Connect prediction points to each other and the last actual point
-                                             />
+          <Accordion type="multiple" className="w-full space-y-4">
+            {parameters.map((parameter) => (
+              <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
+                <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                    <div className="flex items-center">
+                      <parameter.icon className="w-5 h-5 mr-2 text-cyan-500" />
+                       {parameter.name} Trends
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                    <p className="text-sm text-muted-foreground mb-4 text-foreground">
+                      Visualizing {parameter.name} ({parameter.unit}) over time, including predicted values.
+                    </p>
+                    <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={analysisResults}
+                          margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
+                          <YAxis stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                          <RechartsTooltip
+                            content={
+                              <ChartTooltipContent
+                                indicator="dot"
+                                labelClassName="text-sm font-medium text-foreground"
+                                className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
+                              />
+                            }
+                            cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                          />
+                           <RechartsLegend content={ <ChartLegendContent
+                                payload={
+                                    Object.entries(chartConfig)
+                                    .filter(([key]) => key === parameter.key || key === 'prediction') // Filter relevant keys
+                                    .map(([key, config]) => ({
+                                        value: config.label,
+                                        type: key === 'prediction' ? 'dashed' : 'line',
+                                        id: key,
+                                        // Use parameter color for actual data, prediction color for predictions
+                                        color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color,
+                                        icon: config.icon
+                                    }))
+                                }
+                                className="text-foreground" // Ensure legend text is visible
+                             /> }
+                            />
 
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </ChartContainer>
-                             </AccordionContent>
-                         </Card>
-                    </AccordionItem>
-                ))}
-            </Accordion>
+                          {/* Line for actual data */}
+                          <Line
+                            key={`${parameter.key}-actual`}
+                            dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
+                            type="linear"
+                            stroke={'hsl(var(--foreground))'} // Black line for actual data
+                            strokeWidth={2}
+                            dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Use parameter color or black for dots
+                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', stroke: 'hsl(var(--foreground))' }} // Active dot styling
+                            name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
+                            isAnimationActive={false}
+                            connectNulls={false} // Do not connect across the prediction boundary
+                          />
+                          {/* Line for predicted data */}
+                          <Line
+                            key={`${parameter.key}-prediction`}
+                            dataKey={(payload: AnalysisResult, index: number) => {
+                              // Find the index of the first prediction
+                              const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                              // If this payload is a prediction, return its value
+                              if (payload.isPrediction) {
+                                return payload[parameter.key as keyof SensorData];
+                              }
+                              // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
+                              if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
+                                return payload[parameter.key as keyof SensorData];
+                              }
+                              // Otherwise, return null
+                              return null;
+                            }}
+                            type="linear"
+                            stroke={chartConfig.prediction.color} // Prediction line color from config
+                            strokeWidth={2}
+                            strokeDasharray="5 5" // Dashed line for predictions
+                            dot={{ fill: chartConfig[parameter.key]?.color || 'hsl(var(--foreground))', r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color or black
+                            activeDot={false} // Usually disable active dot for predictions
+                            name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
+                            isAnimationActive={false}
+                            connectNulls={true} // Connect prediction points to each other and the last actual point
+                          />
+
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            ))}
+          </Accordion>
         )}
 
-      {/* Parameter Ranges Table */}
-      {analysisResults.length > 0 && (
+        {/* Parameter Ranges Table */}
+        {analysisResults.length > 0 && (
           <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
             <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
+              <CardTitle className="text-xl font-semibold text-foreground">Parameter Ranges for Coral Health</CardTitle>
+              <CardDescription className="text-muted-foreground text-sm text-foreground">Reference thresholds for ideal, caution, and threatening conditions.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-               <div className="overflow-x-auto">
-               <Table className="min-w-full">
-                    <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
-                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead>
-                            <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
-                            <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
-                            <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                     <TableBody>
-                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell>
-                        </TableRow>
-                        <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell>
-                        </TableRow>
-                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell>
-                        </TableRow>
-                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell>
-                        </TableRow>
-                         <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell>
-                        </TableRow>
-                        <TableRow className="border-b-0">
-                            <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell>
-                            <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell>
-                            <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell>
-                        </TableRow>
-                    </TableBody>
+              <div className="overflow-x-auto">
+                <Table className="min-w-full">
+                  <TableHeader className="bg-cyan-600/10 dark:bg-cyan-400/10">
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableHead className="text-left font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 text-foreground">Parameter</TableHead>
+                      <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-green-100/50 dark:bg-green-900/50 text-green-800 dark:text-green-200">Ideal Range</TableHead>
+                      <TableHead className="text-center font-medium py-3 px-4 border-r border-cyan-200/30 dark:border-cyan-700/30 bg-yellow-100/50 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200">Caution Range</TableHead>
+                      <TableHead className="text-center font-medium py-3 px-4 bg-red-100/50 dark:bg-red-900/50 text-red-800 dark:text-red-200">Threatening Condition</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Water Temperature (°C)</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">24-28</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">28-30</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Above 30 (Bleaching risk)</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Salinity (PSU)</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">33-36</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">31-33 or 36-38</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Below 31 or Above 38</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">pH Level</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">8.0-8.3</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">7.8-8.0</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Below 7.8 (Acidification)</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Dissolved Oxygen (mg/L)</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&gt; 6.0</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">4.0-6.0</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Below 4.0 (Hypoxia)</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b border-cyan-200/30 dark:border-cyan-700/30">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Turbidity (NTU)</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 1.0</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">1.0-3.0</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Above 3.0</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b-0">
+                      <TableCell className="font-medium border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">Nitrate (mg/L)</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">&lt; 0.1</TableCell>
+                      <TableCell className="text-center border-r border-cyan-200/30 dark:border-cyan-700/30 py-2 px-4 text-foreground">0.1-0.3</TableCell>
+                      <TableCell className="text-center py-2 px-4 text-foreground">Above 0.3 (Algal blooms)</TableCell>
+                    </TableRow>
+                  </TableBody>
                 </Table>
-                </div>
+              </div>
             </CardContent>
           </Card>
-      )}
+        )}
 
       </div>
 
-       {/* Footer Section */}
+      {/* Footer Section */}
       <footer className="w-full max-w-5xl mt-12 text-center text-white/70 text-xs p-4">
         <p>&copy; {new Date().getFullYear()} CoralGuard by Senath Sethmika. All rights reserved.</p>
         <p>Data analysis for educational and informational purposes only.</p>
-        <div className="flex justify-center space-x-4 mt-2">
+         <div className="flex justify-center space-x-4 mt-2">
              <Link href="https://www.linkedin.com/in/senath-sethmika/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-300 transition-colors duration-300">
                 LinkedIn
             </Link>
@@ -962,6 +1179,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-    
