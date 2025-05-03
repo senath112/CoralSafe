@@ -104,8 +104,7 @@ export default function Home() {
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
 
   // State for new inputs
-  const [longitude, setLongitude] = useState<string>(''); // Keep state if needed for other purposes
-  const [latitude, setLatitude] = useState<string>(''); // Keep state if needed for other purposes
+  // Removed longitude and latitude state
   const [depth, setDepth] = useState<string>('');
 
   // State to store values after analysis starts
@@ -639,7 +638,7 @@ export default function Home() {
       // Ensure progress is 100% visually after loading stops
       setAnalysisProgress(100);
     }
-  }, [sensorData, toast, analysisProgress, longitude, latitude, depth]); // Added new dependencies
+  }, [sensorData, toast, analysisProgress, depth]); // Removed lat/lon from dependencies
 
 
   return (
@@ -1057,6 +1056,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
