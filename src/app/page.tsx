@@ -76,7 +76,7 @@ const chartConfig: ChartConfig = {
   pHLevel: {label: "pH Level", color: "hsl(var(--chart-3))", icon: Beaker},
   dissolvedOxygen: {label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind},
   turbidity: {label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog},
-  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet},
+  nitrate: {label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet}, // Use accent for nitrate line
   prediction: {label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="2,2" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground"/>},
 } satisfies ChartConfig;
 
@@ -106,31 +106,39 @@ export default function Home() {
         setElapsedTime(elapsed);
 
         if (analysisProgress > 0 && analysisProgress < 100) {
-          const totalEstimatedTime = elapsed / (analysisProgress / 100);
-          const remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
-          const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
-          const minutes = Math.floor(remainingSeconds / 60);
-          const seconds = remainingSeconds % 60;
-          if (remainingSeconds > 0) { // Only show if there's time remaining
-              if (minutes > 0) {
-                  setRemainingTimeText(`~${minutes}m ${seconds}s left`);
-              } else {
-                  setRemainingTimeText(`~${seconds}s left`);
-              }
-          } else {
-              setRemainingTimeText('Finishing up...');
-          }
+            const totalEstimatedTime = elapsed / (analysisProgress / 100);
+            let remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
+
+             // If progress hasn't changed much, it might be stuck, so adjust estimation
+             // This is a simple heuristic, might need refinement
+             if (elapsed > 5000 && analysisProgress < 10) { // If it's been 5s and progress is slow
+                remainingTimeMs *= 2; // Double the estimated remaining time
+             }
+
+            const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+
+            if (remainingSeconds > 0) { // Only show if there's time remaining
+                if (minutes > 0) {
+                    setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+                } else {
+                    setRemainingTimeText(`~${seconds}s left`);
+                }
+            } else {
+                setRemainingTimeText('Finishing up...');
+            }
         } else if (analysisProgress === 0) {
-          setRemainingTimeText('Estimating time...');
-        } else {
-          setRemainingTimeText('Finishing up...');
+            setRemainingTimeText('Starting analysis...');
+        } else { // analysisProgress is 100 or calculation yields 0 remaining
+             setRemainingTimeText('Finishing up...');
         }
-      }, 1000);
+      }, 1000); // Check every second
     } else {
       setElapsedTime(0);
-       if (analysisProgress === 100) {
+       if (analysisProgress === 100 && !isLoading) { // Only show complete when not loading anymore
           setRemainingTimeText('Analysis complete!');
-       } else {
+       } else if (!isLoading) { // Clear text if not loading and not complete
            setRemainingTimeText('');
        }
     }
@@ -143,7 +151,7 @@ export default function Home() {
   }, [isLoading, startTime, analysisProgress]);
 
 
-  const downloadReport = (expandSummary = false, expandActions = false) => {
+  const downloadReport = () => {
     const input = reportRef.current;
     if (!input) {
       toast({
@@ -161,16 +169,26 @@ export default function Home() {
 
     elementsToColor.forEach(el => {
         const elClasses = el.classList;
-        const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => elClasses.contains(cls));
+        // Check if the element or any ancestor has background color classes
+        let hasBgClass = false;
+        let currentEl: HTMLElement | SVGElement | null = el as any; // Type assertion
+        while (currentEl && currentEl !== input) {
+             if (currentEl.classList && ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => currentEl.classList.contains(cls))) {
+                hasBgClass = true;
+                break;
+            }
+            currentEl = currentEl.parentElement as HTMLElement | SVGElement | null; // Cast parentElement
+        }
+
 
         if (!hasBgClass) {
              originalColors.set(el, el.style.fill || el.style.color);
              if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                  el.style.fill = 'black';
-                 el.style.color = '';
+                 el.style.color = ''; // Reset color if it was set
              } else {
                  el.style.color = 'black';
-                 el.style.fill = '';
+                 el.style.fill = ''; // Reset fill if it was set
              }
         }
     });
@@ -191,16 +209,18 @@ export default function Home() {
         });
     };
 
-    setState(summaryTriggers, expandSummary ? 'open' : 'closed');
-    setState(summaryContents, expandSummary ? 'open' : 'closed');
-    setState(actionsTriggers, expandActions ? 'open' : 'closed');
-    setState(actionsContents, expandActions ? 'open' : 'closed');
+    // Default to expanded for PDF
+    setState(summaryTriggers, 'open');
+    setState(summaryContents, 'open');
+    setState(actionsTriggers, 'open');
+    setState(actionsContents, 'open');
 
+    // Ensure accordion content is fully visible before capturing
     setTimeout(() => {
         html2canvas(input, {
             scale: 2,
             useCORS: true,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff' // Force white background for PDF
         })
         .then((canvas) => {
             const imgData = canvas.toDataURL('image/png');
@@ -212,15 +232,15 @@ export default function Home() {
             let heightLeft = pdfHeight;
             let position = 0;
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
+             pdf.addImage(imgData, 'PNG', 5, 5, pdfWidth - 10, pdfHeight - 10); // Add padding
+             heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
 
-            while (heightLeft > 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
-            }
+             while (heightLeft > 0) {
+                 position = heightLeft - (pdfHeight - 10); // Adjust position for padding
+                 pdf.addPage();
+                 pdf.addImage(imgData, 'PNG', 5, position - 5, pdfWidth - 10, pdfHeight - 10); // Add padding to subsequent pages
+                 heightLeft -= (pageHeight - 10); // Adjust remaining height calculation for padding
+             }
 
             pdf.save('coral_safe_report.pdf');
             toast({
@@ -237,7 +257,8 @@ export default function Home() {
             });
         })
         .finally(() => {
-            elementsToColor.forEach(el => {
+            // Restore original colors
+             elementsToColor.forEach(el => {
                  const hasBgClass = ['bg-green-200', 'bg-yellow-200', 'bg-red-200', 'dark:bg-green-800/50', 'dark:bg-yellow-800/50', 'dark:bg-red-800/50', 'bg-gray-200', 'dark:bg-gray-700'].some(cls => el.classList.contains(cls));
                  if (!hasBgClass) {
                      const originalColor = originalColors.get(el);
@@ -248,6 +269,7 @@ export default function Home() {
                              el.style.color = originalColor;
                          }
                      } else {
+                          // If no original color was stored, explicitly reset
                          if (el instanceof SVGTextElement || el instanceof SVGTSpanElement) {
                              el.style.fill = '';
                          } else {
@@ -257,6 +279,7 @@ export default function Home() {
                  }
             });
 
+            // Restore original accordion states
             originalStates.forEach((state, el) => {
                 if (state) {
                     el.setAttribute('data-state', state);
@@ -265,7 +288,7 @@ export default function Home() {
                 }
             });
         });
-    }, 100);
+    }, 150); // Slightly increased timeout for rendering
   };
 
 
@@ -276,15 +299,26 @@ export default function Home() {
         console.warn("No data rows found after header.");
         return [];
     }
-    const header = lines[0].split(',').map(item => item.trim());
-    const expectedHeaders = ['Date', 'Location', 'Water_Temperature_C', 'Salinity_PSU', 'pH_Level', 'Dissolved_Oxygen_mg_L', 'Turbidity_NTU', 'Nitrate_mg_L'];
+    // Assuming the first line is the header and skipping it
+    const headerLine = lines[0].toLowerCase();
+    const dataLines = lines.slice(1);
 
-    if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
-        console.warn("CSV header doesn't match expected format. Proceeding, but results might be inaccurate.");
+    // Basic header check (optional but recommended)
+    const expectedHeaders = ['date', 'location', 'water_temperature_c', 'salinity_psu', 'ph_level', 'dissolved_oxygen_mg_l', 'turbidity_ntu', 'nitrate_mg_l'];
+    const actualHeaders = headerLine.split(',').map(h => h.trim());
+    if (actualHeaders.length !== expectedHeaders.length || !expectedHeaders.every((h, i) => actualHeaders[i].includes(h))) {
+        console.warn("CSV header doesn't match expected format exactly. Proceeding, but results might be inaccurate. Expected:", expectedHeaders, "Got:", actualHeaders);
+        // Consider throwing an error or showing a toast if strict format is required
+         // toast({
+         //   title: 'Warning',
+         //   description: 'CSV header format seems incorrect. Analysis might be inaccurate.',
+         //   variant: 'destructive', // Use destructive variant for warnings? Or create a 'warning' variant
+         // });
     }
 
-    const parsedEntries = lines.slice(1).map((entry, index) => {
-      console.log(`Parsing line ${index + 1}: ${entry}`);
+
+    const parsedEntries = dataLines.map((entry, index) => {
+      console.log(`Parsing line ${index + 2}: ${entry}`); // Line number includes header
       const parts = entry.split(',').map(item => item.trim());
       if (parts.length !== expectedHeaders.length) {
          console.warn(`Skipping incomplete or malformed entry (line ${index + 2}): ${entry}`);
@@ -301,6 +335,7 @@ export default function Home() {
       const nitrateNum = parseFloat(nitrate);
 
       if (
+        !date || !location || // Check if date and location are present
         isNaN(waterTemperatureNum) ||
         isNaN(salinityNum) ||
         isNaN(pHLevelNum) ||
@@ -308,12 +343,12 @@ export default function Home() {
         isNaN(turbidityNum) ||
         isNaN(nitrateNum)
       ) {
-         console.warn(`Skipping entry with invalid numeric values (line ${index + 2}): ${entry}`);
+         console.warn(`Skipping entry with invalid or missing values (line ${index + 2}): ${entry}`);
         return null;
       }
 
       return {
-        time: date,
+        time: date, // Keep original date string
         location: location,
         waterTemperature: waterTemperatureNum,
         salinity: salinityNum,
@@ -322,7 +357,7 @@ export default function Home() {
         turbidity: turbidityNum,
         nitrate: nitrateNum,
       };
-    }).filter((item): item is SensorData => item !== null);
+    }).filter((item): item is SensorData => item !== null); // Type guard to filter out nulls
     console.log("Parsing completed. Parsed entries:", parsedEntries);
     return parsedEntries;
   };
@@ -345,16 +380,39 @@ export default function Home() {
     setAnalysisResults([]);
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
+    setRemainingTimeText('Initializing...'); // Initial time text
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData;
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
     let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
 
+    // Use requestAnimationFrame for smoother progress updates
+    let frameId: number | null = null;
+    const updateProgressSmoothly = (targetProgress: number) => {
+        if (frameId) cancelAnimationFrame(frameId);
+
+        const animate = () => {
+            setAnalysisProgress(currentProgress => {
+                const diff = targetProgress - currentProgress;
+                if (Math.abs(diff) < 0.1) {
+                    frameId = null;
+                    return targetProgress; // Snap to target if close
+                }
+                // Ease-out effect: move faster initially, then slower
+                const step = currentProgress + diff * 0.1;
+                frameId = requestAnimationFrame(animate);
+                return step;
+            });
+        };
+        frameId = requestAnimationFrame(animate);
+    };
+
+
     try {
         console.log("Parsing sensor data...");
-        setAnalysisProgress(5); // Start progress
-        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for UI update
+        updateProgressSmoothly(5); // Start progress smoothly
+        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate parsing time & allow UI update
         const parsedData = parseData(sensorData);
         console.log("Parsed data:", parsedData);
 
@@ -362,36 +420,44 @@ export default function Home() {
             console.log("No valid data after parsing.");
             toast({
                 title: 'Error',
-                description: 'No valid data found or data format is incorrect. Please check your input.',
+                description: 'No valid data found or data format is incorrect. Check headers and numeric values.',
                 variant: 'destructive',
             });
             setIsLoading(false);
             setStartTime(null);
             setAnalysisProgress(0); // Reset progress on error
+            setRemainingTimeText(''); // Clear time text
             return;
         }
-        setAnalysisProgress(10); // Parsing complete
+        updateProgressSmoothly(10); // Parsing complete
 
         // --- Train Model ---
         console.log("Training model using prediction-model.ts...");
-        setAnalysisProgress(15); // Start training progress
-        await new Promise(resolve => setTimeout(resolve, 50));
+        updateProgressSmoothly(15); // Start training progress
+        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
+
+        const trainingStartTime = Date.now(); // Track training time separately
         trainingResult = await trainPredictionModel(parsedData, (epochProgress) => {
             // Update progress based on training epochs (15% to 45%)
-            setAnalysisProgress(15 + Math.floor(epochProgress * 30));
+             updateProgressSmoothly(15 + Math.floor(epochProgress * 30));
         });
+        const trainingEndTime = Date.now();
+        console.log(`Model training took ${(trainingEndTime - trainingStartTime) / 1000}s`);
+
         setTrainedModelInfo(trainingResult); // Save the trained model and norm params
         if (trainingResult) {
             normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
         }
         console.log("Model training finished. Training result:", trainingResult);
-        setAnalysisProgress(45); // Training complete
+        updateProgressSmoothly(45); // Training complete
 
         // --- Analyze Data Points ---
         console.log("Analyzing each data point for suitability...");
-        setAnalysisProgress(50); // Start analysis progress
-        await new Promise(resolve => setTimeout(resolve, 50));
-        let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
+         updateProgressSmoothly(50); // Start analysis progress
+         await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start time
+
+         const analysisStartTime = Date.now();
+         let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
             console.log(`Analyzing data point ${index}:`, data);
             const {isSuitable, summary, threateningFactors} = analyzeSensorData(
                 data,
@@ -402,7 +468,8 @@ export default function Home() {
 
              let improvements: string[] = [];
              if (isSuitable === false) {
-                 improvements = Object.entries(threateningFactors)
+                 // Get specific threatening factors first
+                 const specificThreats = Object.entries(threateningFactors)
                      .filter(([_, value]) => value)
                      .map(([key]) => {
                          switch(key) {
@@ -415,16 +482,21 @@ export default function Home() {
                              default: return `Address issues related to ${key}.`;
                          }
                      });
-                 if (improvements.length === 0) {
-                    // Find caution factors if no threatening ones were listed
-                    const cautions = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
-                    if (cautions && cautions[1]) {
-                        improvements = [`Multiple parameters are in caution ranges (${cautions[1]}), contributing to overall unsuitability. Review all parameters.`];
-                    } else {
-                         improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
-                    }
-                 }
+
+                if (specificThreats.length > 0) {
+                    improvements = specificThreats;
+                } else {
+                     // If isSuitable is false but no specific *threatening* factors, it means multiple cautions pushed it over
+                     const cautions = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
+                     if (cautions && cautions[1]) {
+                         improvements = [`Multiple parameters are in caution ranges (${cautions[1]}), contributing to overall unsuitability. Review all parameters.`];
+                     } else {
+                          improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
+                     }
+                }
+
             } else if (isSuitable === true) {
+                 // Check for cautions even if suitable overall
                  const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
                  if (cautions) {
                      improvements = ["Environment is suitable, but monitor parameters in caution ranges."];
@@ -437,27 +509,31 @@ export default function Home() {
 
 
             // Update progress during analysis (50% to 75%)
-            const currentProgress = 50 + Math.floor(((index + 1) / parsedData.length) * 25);
-            setAnalysisProgress(currentProgress);
+            const currentTargetProgress = 50 + Math.floor(((index + 1) / parsedData.length) * 25);
+            updateProgressSmoothly(currentTargetProgress);
 
 
             return {
                 ...data,
                 isSuitable,
                 summary,
-                improvements,
+                improvements, // Now an array of strings
                 suitabilityIndex,
                 isPrediction: false,
             };
         });
-        console.log("Finished suitability analysis for all data points.");
-        setAnalysisProgress(75); // Analysis complete
+         const analysisEndTime = Date.now();
+         console.log(`Data point analysis took ${(analysisEndTime - analysisStartTime) / 1000}s`);
+         console.log("Finished suitability analysis for all data points.");
+         updateProgressSmoothly(75); // Analysis complete
 
         // --- Generate Predictions ---
         if (trainingResult) {
             console.log("Generating predictions using prediction-model.ts...");
-             setAnalysisProgress(80); // Start prediction progress
-             await new Promise(resolve => setTimeout(resolve, 50));
+            updateProgressSmoothly(80); // Start prediction progress
+            await new Promise(resolve => setTimeout(resolve, 100)); // Simulate start
+
+            const predictionStartTime = Date.now();
             const numPredictions = 5;
             // Pass the model, normParams, and the already analyzed results
             const predictedResults = await generatePredictions(
@@ -467,9 +543,11 @@ export default function Home() {
                 numPredictions,
                 (predictionProgress) => {
                     // Update progress during prediction (80% to 100%)
-                    setAnalysisProgress(80 + Math.floor(predictionProgress * 20));
+                     updateProgressSmoothly(80 + Math.floor(predictionProgress * 20));
                 }
             );
+            const predictionEndTime = Date.now();
+            console.log(`Predictions took ${(predictionEndTime - predictionStartTime) / 1000}s`);
 
             // Combine original analyzed results with new predictions
              detailedResults = [...detailedResults, ...predictedResults];
@@ -480,11 +558,14 @@ export default function Home() {
              toast({
                  title: "Prediction Skipped",
                  description: "Model training failed or was skipped, so predictions could not be made.",
-                 variant: "destructive",
+                 variant: "destructive", // Consider a less alarming variant?
              });
+             // If skipping predictions, jump progress to 100
+             updateProgressSmoothly(100);
         }
-        setAnalysisProgress(100); // Ensure progress reaches 100%
 
+        // Final state updates after all async operations
+        updateProgressSmoothly(100); // Ensure progress reaches 100%
         console.log("Final analysis results (including predictions):", detailedResults);
         setAnalysisResults(detailedResults);
         toast({
@@ -500,7 +581,9 @@ export default function Home() {
             variant: 'destructive',
         });
         setAnalysisProgress(0); // Reset progress on error
+        setRemainingTimeText(''); // Clear time text
     } finally {
+         if (frameId) cancelAnimationFrame(frameId); // Clean up animation frame
          // Dispose the normalization parameter tensors AFTER analysis and predictions
          if (normParamsToDispose) {
             tf.dispose([normParamsToDispose.min, normParamsToDispose.max]);
@@ -511,7 +594,7 @@ export default function Home() {
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
         setStartTime(null);
-        // Ensure progress is 100% even if some steps were skipped
+        // Ensure progress is 100% visually after loading stops
         setAnalysisProgress(100);
     }
 };
@@ -541,7 +624,7 @@ export default function Home() {
                  <AvatarImage data-ai-hint="coral reef" src="https://picsum.photos/seed/coralreef/50/50" alt="CoralSafe Logo" className="border-2 border-cyan-300 rounded-full" />
                  <AvatarFallback className="bg-cyan-500 text-white">CS</AvatarFallback>
                </Avatar>
-               <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
+                 <CardTitle className="ml-4 text-2xl font-semibold text-foreground">CoralSafe: Sensor Data Analyzer</CardTitle>
              </div>
 
             <CardDescription className="text-muted-foreground text-sm">
@@ -569,7 +652,7 @@ export default function Home() {
              {isLoading && (
                  <div className="w-full px-4 mt-4">
                      <Progress value={analysisProgress} className="w-full [&>div]:bg-cyan-400 h-2.5 rounded-full bg-white/30" />
-                     <p className="text-center text-sm text-foreground mt-2">
+                     <p className="text-center text-sm text-foreground mt-2"> {/* Changed to text-foreground */}
                         Analysis Progress: {analysisProgress.toFixed(0)}% {remainingTimeText && `(${remainingTimeText})`}
                      </p>
                  </div>
@@ -584,7 +667,7 @@ export default function Home() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
                  <Button
-                    onClick={() => downloadReport()}
+                    onClick={downloadReport}
                     className="bg-cyan-500 text-white hover:bg-cyan-600 transition-colors duration-300 shadow-sm"
                     size="sm"
                  >
@@ -611,7 +694,7 @@ export default function Home() {
                 </TableHeader>
                 <TableBody>
                   {analysisResults.map((result, index) => {
-                      const isPrediction = result.isSuitable === null;
+                      const isPrediction = result.isPrediction === true; // More robust check
                       let suitabilityClass = '';
                       let suitabilityText = '';
                       let suitabilityIndexText = result.suitabilityIndex !== undefined ? `(${result.suitabilityIndex.toFixed(0)})` : '';
@@ -622,17 +705,18 @@ export default function Home() {
                           suitabilityText = 'Prediction';
                           suitabilityIndexText = '';
                       } else {
-                           const isIdeal = result.isSuitable === true && !analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
-                           const isWarning = result.isSuitable === true && analyzeSensorData(result, sensorDataThresholds).summary.includes('caution factors:');
-                           const isThreatening = result.isSuitable === false;
-
-                           if (isIdeal) {
+                           // Use the calculated suitabilityIndex for coloring
+                            if (result.suitabilityIndex === undefined) {
+                                // Fallback if index somehow isn't calculated
+                                suitabilityClass = 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+                                suitabilityText = 'Unknown';
+                           } else if (result.suitabilityIndex >= 80) { // Ideal
                                suitabilityClass = 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200';
                                suitabilityText = 'Suitable';
-                           } else if (isWarning) {
+                           } else if (result.suitabilityIndex >= 50) { // Warning/Caution
                                suitabilityClass = 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-200';
                                suitabilityText = 'Warning';
-                           } else {
+                           } else { // Threatening
                                suitabilityClass = 'bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200';
                                suitabilityText = 'Threatening';
                            }
@@ -671,12 +755,12 @@ export default function Home() {
                                 <AccordionContent data-actions-content>
                                    <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
                                        {result.improvements && result.improvements.length > 0 ? (
-                                           result.improvements.map((improvement, i) => (
-                                               <li key={i}>{improvement}</li>
-                                            ))
-                                       ) : (
-                                           <li>No specific actions suggested.</li>
-                                       )}
+                                            result.improvements.map((improvement, i) => (
+                                                <li key={i}>{improvement}</li>
+                                             ))
+                                        ) : (
+                                            <li>{(isPrediction) ? 'N/A for predictions' : 'No specific actions suggested.'}</li>
+                                        )}
                                    </ul>
                                 </AccordionContent>
                               </AccordionItem>
@@ -727,33 +811,36 @@ export default function Home() {
                                                 }
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
                                             />
-                                          <RechartsLegend content={ <ChartLegendContent
-                                              payload={
-                                                Object.entries(chartConfig)
-                                                  .filter(([key]) => key === parameter.key || key === 'prediction')
-                                                  .map(([key, config]) => ({
-                                                    value: config.label,
-                                                    type: key === 'prediction' ? 'dashed' : 'line',
-                                                    id: key,
-                                                    color: key === 'prediction' ? 'hsl(var(--muted-foreground))' : chartConfig[parameter.key]?.color,
-                                                    icon: config.icon
-                                                  }))
-                                              }
-                                              className="text-foreground"
-                                          /> }
-                                          />
+                                           <RechartsLegend content={ <ChartLegendContent
+                                                payload={
+                                                    Object.entries(chartConfig)
+                                                    .filter(([key]) => key === parameter.key || key === 'prediction') // Filter relevant keys
+                                                    .map(([key, config]) => ({
+                                                        value: config.label,
+                                                        type: key === 'prediction' ? 'dashed' : 'line',
+                                                        id: key,
+                                                        // Use parameter color for actual data, prediction color for predictions
+                                                        color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color,
+                                                        icon: config.icon
+                                                    }))
+                                                }
+                                                className="text-foreground" // Ensure legend text is visible
+                                             /> }
+                                            />
+                                          {/* Line for actual data */}
                                           <Line
                                             key={`${parameter.key}-actual`}
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]}
                                             type="linear"
-                                            stroke="hsl(var(--foreground))"
+                                            stroke={'#000000'} // Black line for actual data
                                             strokeWidth={2}
-                                            dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
-                                            activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }}
-                                            name={parameter.name}
+                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 4, strokeWidth: 0 }} // Use parameter color for dots, increased size
+                                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig[parameter.key]?.color || '#8884d8', stroke: '#000000' }} // Active dot styling
+                                            name={chartConfig[parameter.key]?.label || parameter.name} // Use label from config
                                             isAnimationActive={false}
-                                            connectNulls={false} // Do not connect across null (prediction boundary)
+                                            connectNulls={false} // Do not connect across the prediction boundary
                                           />
+                                           {/* Line for predicted data */}
                                            <Line
                                                 key={`${parameter.key}-prediction`}
                                                 dataKey={(payload: AnalysisResult, index: number) => {
@@ -763,22 +850,22 @@ export default function Home() {
                                                     if (payload.isPrediction) {
                                                         return payload[parameter.key as keyof AnalysisResult];
                                                     }
-                                                    // If this payload is the last actual data point *before* the first prediction, return its value
+                                                    // If this payload is the last actual data point *before* the first prediction, return its value to connect the lines
                                                     if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
                                                         return payload[parameter.key as keyof AnalysisResult];
                                                     }
-                                                    // Otherwise, return null to create a gap for non-prediction points
+                                                    // Otherwise, return null
                                                     return null;
                                                 }}
-                                                stroke="hsl(var(--muted-foreground))" // Prediction line color
                                                 type="linear"
+                                                stroke={chartConfig.prediction.color} // Prediction line color from config
                                                 strokeWidth={2}
                                                 strokeDasharray="5 5" // Dashed line for predictions
-                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3, strokeWidth: 0}} // Use parameter color for dots, but maybe smaller/different style?
-                                                activeDot={false} // Disable active dot for predictions
-                                                name={`${parameter.name} (Pred.)`}
+                                                 dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 4, strokeWidth: 0 }} // Dots for predictions, using parameter color
+                                                activeDot={false} // Usually disable active dot for predictions
+                                                name={`${chartConfig[parameter.key]?.label || parameter.name} (Pred.)`} // Use label from config
                                                 isAnimationActive={false}
-                                                connectNulls={true} // Connect nulls *within* the prediction line segment
+                                                connectNulls={true} // Connect prediction points to each other and the last actual point
                                              />
 
                                         </LineChart>
@@ -875,3 +962,4 @@ export default function Home() {
     </div>
   );
 }
+
