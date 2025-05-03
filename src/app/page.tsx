@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -39,6 +38,7 @@ import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Ga
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
 import { getLocationName } from '@/ai/flows/get-location-name'; // Import the new flow
+import { parse } from 'date-fns'; // Import date-fns
 
 
 // Dynamically import visualization components to avoid SSR issues
@@ -1334,6 +1334,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
