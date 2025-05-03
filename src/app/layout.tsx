@@ -2,7 +2,6 @@
 import type {Metadata} from 'next';
 import { Inter } from 'next/font/google'; // Import Inter font
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
-// Removed AuthProvider import
 import './globals.css';
 
 // Initialize Inter font
@@ -22,9 +21,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable}`}> {/* Remove extra whitespace here */}
+    <html lang="en" className={`${inter.variable}`}>
+      {/* Ensure no whitespace between <html> and <body> */}
       <body className={`font-sans antialiased`}> {/* Use font-sans utility class */}
-         {/* Removed AuthProvider wrapper */}
          {children}
          <Toaster /> {/* Add Toaster component here */}
       </body>
