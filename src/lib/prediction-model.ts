@@ -3,6 +3,7 @@
 
 import * as tf from '@tensorflow/tfjs';
 import type { SensorData, AnalysisResult } from '@/app/page'; // Assuming types are exported from page.tsx or moved to a types file
+import { parse } from 'date-fns'; // For parsing date strings
 
 export interface NormalizationParams {
   min: tf.Tensor;
@@ -27,7 +28,8 @@ const denormalizeData = (tensor: tf.Tensor, normParams: NormalizationParams): tf
 
 // Function to train the TensorFlow.js model
 export const trainPredictionModel = async (
-  data: SensorData[]
+  data: SensorData[],
+  onProgress?: (progress: number) => void // Optional progress callback
 ): Promise<{ model: tf.Sequential; normParams: NormalizationParams } | null> => {
   console.log("Starting model training in prediction-model.ts...");
   if (data.length < 2) {
@@ -76,14 +78,20 @@ export const trainPredictionModel = async (
     console.log("Compiled model.");
 
     // Train the model on NORMALIZED data
-    console.log("Starting model fitting...");
+    const epochs = 150; // Store epochs in a variable
+    console.log(`Starting model fitting for ${epochs} epochs...`);
     await model.fit(normalizedTensor, normalizedTensor, {
-      epochs: 150, // Increased epochs slightly
+      epochs: epochs,
       batchSize: Math.max(1, Math.floor(data.length / 10)), // Dynamic batch size
       shuffle: true,
       callbacks: {
         onEpochEnd: (epoch, logs) => {
           console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}`);
+          if (onProgress) {
+            // Calculate progress based on current epoch
+            const progress = (epoch + 1) / epochs;
+            onProgress(progress); // Call the callback with progress (0 to 1)
+          }
         },
       },
     });
@@ -109,11 +117,48 @@ export const generatePredictions = async (
   model: tf.Sequential,
   normParams: NormalizationParams,
   initialData: AnalysisResult[], // Use AnalysisResult which includes previous predictions
-  numPredictions: number
+  numPredictions: number,
+  onProgress?: (progress: number) => void // Optional progress callback
 ): Promise<AnalysisResult[]> => {
     console.log("Starting predictions in prediction-model.ts...");
     let currentInputDataArray: AnalysisResult[] = JSON.parse(JSON.stringify(initialData)); // Deep copy
     let predictedResults: AnalysisResult[] = [];
+
+     // --- Calculate Average Time Difference ---
+     let averageTimeDiffMs = 24 * 60 * 60 * 1000; // Default to 1 day if less than 2 records
+     if (currentInputDataArray.length >= 2) {
+        let totalDiffMs = 0;
+        let validDiffs = 0;
+        for (let i = 1; i < currentInputDataArray.length; i++) {
+            try {
+                // Attempt to parse dates, handling potential invalid formats
+                const date1 = parse(currentInputDataArray[i].time, 'yyyy-MM-dd', new Date());
+                const date2 = parse(currentInputDataArray[i - 1].time, 'yyyy-MM-dd', new Date());
+                // Check if parsing was successful (returns a valid Date object, not 'Invalid Date')
+                if (!isNaN(date1.getTime()) && !isNaN(date2.getTime())) {
+                    const diff = Math.abs(date1.getTime() - date2.getTime());
+                    if (diff > 0) { // Only consider positive differences
+                        totalDiffMs += diff;
+                        validDiffs++;
+                    }
+                } else {
+                    console.warn(`Could not parse dates for time difference calculation: ${currentInputDataArray[i].time}, ${currentInputDataArray[i-1].time}`);
+                }
+            } catch (e) {
+                console.warn(`Error parsing dates: ${currentInputDataArray[i].time}, ${currentInputDataArray[i-1].time}`, e);
+            }
+        }
+         if (validDiffs > 0) {
+             averageTimeDiffMs = totalDiffMs / validDiffs;
+             console.log(`Calculated average time difference: ${averageTimeDiffMs / (1000 * 60 * 60 * 24)} days`);
+         } else {
+             console.warn("No valid time differences found, defaulting to 1 day.");
+         }
+     } else {
+         console.warn("Less than 2 data points, defaulting time difference to 1 day.");
+     }
+     // --- End Calculate Average Time Difference ---
+
 
     for (let i = 0; i < numPredictions; i++) {
         console.log(`Predicting step P${i + 1}`);
@@ -149,9 +194,26 @@ export const generatePredictions = async (
             const predictedValuesRaw = await predictionTensorDenormalized.data();
             console.log(`De-normalized predicted values for P${i + 1}:`, predictedValuesRaw);
 
+            // Calculate the predicted time
+             let predictedTimeStr = `P${i + 1}`;
+             try {
+                 // Attempt to parse the last known time
+                 const lastTimeDate = parse(lastKnownData.time, 'yyyy-MM-dd', new Date());
+                 if (!isNaN(lastTimeDate.getTime())) {
+                     const predictedTime = new Date(lastTimeDate.getTime() + averageTimeDiffMs);
+                     // Format the date back to YYYY-MM-DD
+                     predictedTimeStr = `${predictedTime.getFullYear()}-${String(predictedTime.getMonth() + 1).padStart(2, '0')}-${String(predictedTime.getDate()).padStart(2, '0')}`;
+                 } else {
+                     console.warn(`Could not parse last known time for prediction P${i+1}: ${lastKnownData.time}. Using default label.`);
+                 }
+             } catch (e) {
+                 console.warn(`Error calculating predicted time for P${i+1} based on ${lastKnownData.time}`, e);
+             }
+
+
              // Add slight random variations for realism AFTER de-normalization
             const predictedResult: AnalysisResult = {
-                time: `P${i + 1}`,
+                time: predictedTimeStr, // Use calculated or default time string
                 location: lastKnownData.location, // Assume same location
                 // Apply variations to de-normalized values, ensuring non-negative results
                 waterTemperature: Math.max(0, predictedValuesRaw[0] + (Math.random() - 0.5) * 0.1),
@@ -173,6 +235,11 @@ export const generatePredictions = async (
             // Add this prediction to the array for the next prediction step's input
             currentInputDataArray.push(predictedResult);
 
+             if (onProgress) {
+                const progress = (i + 1) / numPredictions;
+                onProgress(progress); // Call the callback with progress (0 to 1)
+            }
+
         } finally {
             // Dispose tensors used in this prediction step
             if (inputTensorRaw) tf.dispose(inputTensorRaw);
@@ -187,3 +254,4 @@ export const generatePredictions = async (
     console.log("Finished predictions in prediction-model.ts.");
     return predictedResults;
 };
+

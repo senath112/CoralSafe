@@ -107,14 +107,18 @@ export default function Home() {
 
         if (analysisProgress > 0 && analysisProgress < 100) {
           const totalEstimatedTime = elapsed / (analysisProgress / 100);
-          const remainingTimeMs = totalEstimatedTime - elapsed;
+          const remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
           const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
           const minutes = Math.floor(remainingSeconds / 60);
           const seconds = remainingSeconds % 60;
-          if (minutes > 0) {
-            setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+          if (remainingSeconds > 0) { // Only show if there's time remaining
+              if (minutes > 0) {
+                  setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+              } else {
+                  setRemainingTimeText(`~${seconds}s left`);
+              }
           } else {
-            setRemainingTimeText(`~${seconds}s left`);
+              setRemainingTimeText('Finishing up...');
           }
         } else if (analysisProgress === 0) {
           setRemainingTimeText('Estimating time...');
@@ -337,7 +341,7 @@ export default function Home() {
     }
 
     setIsLoading(true);
-    setAnalysisProgress(0);
+    setAnalysisProgress(0); // Reset progress
     setAnalysisResults([]);
     setStartTime(Date.now());
     setTrainedModelInfo(null); // Clear previous model
@@ -349,6 +353,8 @@ export default function Home() {
 
     try {
         console.log("Parsing sensor data...");
+        setAnalysisProgress(5); // Start progress
+        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for UI update
         const parsedData = parseData(sensorData);
         console.log("Parsed data:", parsedData);
 
@@ -361,22 +367,30 @@ export default function Home() {
             });
             setIsLoading(false);
             setStartTime(null);
+            setAnalysisProgress(0); // Reset progress on error
             return;
         }
+        setAnalysisProgress(10); // Parsing complete
 
         // --- Train Model ---
         console.log("Training model using prediction-model.ts...");
-        setAnalysisProgress(10);
-        trainingResult = await trainPredictionModel(parsedData);
+        setAnalysisProgress(15); // Start training progress
+        await new Promise(resolve => setTimeout(resolve, 50));
+        trainingResult = await trainPredictionModel(parsedData, (epochProgress) => {
+            // Update progress based on training epochs (15% to 45%)
+            setAnalysisProgress(15 + Math.floor(epochProgress * 30));
+        });
         setTrainedModelInfo(trainingResult); // Save the trained model and norm params
         if (trainingResult) {
             normParamsToDispose = trainingResult.normParams; // Store normParams for later disposal
         }
         console.log("Model training finished. Training result:", trainingResult);
-        setAnalysisProgress(30);
+        setAnalysisProgress(45); // Training complete
 
         // --- Analyze Data Points ---
         console.log("Analyzing each data point for suitability...");
+        setAnalysisProgress(50); // Start analysis progress
+        await new Promise(resolve => setTimeout(resolve, 50));
         let detailedResults: AnalysisResult[] = parsedData.map((data, index) => {
             console.log(`Analyzing data point ${index}:`, data);
             const {isSuitable, summary, threateningFactors} = analyzeSensorData(
@@ -402,7 +416,13 @@ export default function Home() {
                          }
                      });
                  if (improvements.length === 0) {
-                    improvements = ["Multiple parameters are in caution ranges, contributing to overall unsuitability. Review all parameters."];
+                    // Find caution factors if no threatening ones were listed
+                    const cautions = analyzeSensorData(data, sensorDataThresholds).summary.match(/caution factors: (.*?)\./);
+                    if (cautions && cautions[1]) {
+                        improvements = [`Multiple parameters are in caution ranges (${cautions[1]}), contributing to overall unsuitability. Review all parameters.`];
+                    } else {
+                         improvements = ["Multiple parameters are outside ideal ranges, contributing to overall unsuitability. Review all parameters."];
+                    }
                  }
             } else if (isSuitable === true) {
                  const cautions = analyzeSensorData(data, sensorDataThresholds).summary.includes('caution factors:');
@@ -411,14 +431,15 @@ export default function Home() {
                  } else {
                      improvements = ["Environment appears ideal, continue monitoring."];
                  }
-            } else {
-                 improvements = [];
+            } else { // isSuitable is null (should not happen with current logic, but handle defensively)
+                 improvements = ["Could not determine specific actions."];
             }
 
 
-            const currentProgress = 30 + ((index + 1) / parsedData.length) * 30;
+            // Update progress during analysis (50% to 75%)
+            const currentProgress = 50 + Math.floor(((index + 1) / parsedData.length) * 25);
             setAnalysisProgress(currentProgress);
-            console.log(`Analysis progress: ${currentProgress.toFixed(0)}%`);
+
 
             return {
                 ...data,
@@ -430,34 +451,39 @@ export default function Home() {
             };
         });
         console.log("Finished suitability analysis for all data points.");
+        setAnalysisProgress(75); // Analysis complete
 
         // --- Generate Predictions ---
         if (trainingResult) {
             console.log("Generating predictions using prediction-model.ts...");
+             setAnalysisProgress(80); // Start prediction progress
+             await new Promise(resolve => setTimeout(resolve, 50));
             const numPredictions = 5;
             // Pass the model, normParams, and the already analyzed results
             const predictedResults = await generatePredictions(
                 trainingResult.model,
                 trainingResult.normParams,
                 detailedResults, // Pass the current results array for sequential prediction
-                numPredictions
+                numPredictions,
+                (predictionProgress) => {
+                    // Update progress during prediction (80% to 100%)
+                    setAnalysisProgress(80 + Math.floor(predictionProgress * 20));
+                }
             );
 
             // Combine original analyzed results with new predictions
              detailedResults = [...detailedResults, ...predictedResults];
 
-             // Update progress after predictions (assuming predictions take up the remaining 40%)
-            setAnalysisProgress(100);
-            console.log("Finished predictions.");
+             console.log("Finished predictions.");
         } else {
              console.log("Model training failed or skipped. No predictions will be made.");
-             setAnalysisProgress(100);
              toast({
                  title: "Prediction Skipped",
                  description: "Model training failed or was skipped, so predictions could not be made.",
                  variant: "destructive",
              });
         }
+        setAnalysisProgress(100); // Ensure progress reaches 100%
 
         console.log("Final analysis results (including predictions):", detailedResults);
         setAnalysisResults(detailedResults);
@@ -473,7 +499,7 @@ export default function Home() {
             description: `An error occurred: ${error.message}. Check console for details.`,
             variant: 'destructive',
         });
-        setAnalysisProgress(0);
+        setAnalysisProgress(0); // Reset progress on error
     } finally {
          // Dispose the normalization parameter tensors AFTER analysis and predictions
          if (normParamsToDispose) {
@@ -485,9 +511,8 @@ export default function Home() {
         console.log("Analysis process finished. Setting loading state to false.");
         setIsLoading(false);
         setStartTime(null);
-        if (analysisProgress < 100) {
-             setAnalysisProgress(100);
-         }
+        // Ensure progress is 100% even if some steps were skipped
+        setAnalysisProgress(100);
     }
 };
 
@@ -703,7 +728,6 @@ export default function Home() {
                                                  cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3"}}
                                             />
                                           <RechartsLegend content={ <ChartLegendContent
-                                              nameKey={parameter.key}
                                               payload={
                                                 Object.entries(chartConfig)
                                                   .filter(([key]) => key === parameter.key || key === 'prediction')
@@ -711,7 +735,7 @@ export default function Home() {
                                                     value: config.label,
                                                     type: key === 'prediction' ? 'dashed' : 'line',
                                                     id: key,
-                                                    color: key === 'prediction' ? config.color : chartConfig[parameter.key]?.color,
+                                                    color: key === 'prediction' ? 'hsl(var(--muted-foreground))' : chartConfig[parameter.key]?.color,
                                                     icon: config.icon
                                                   }))
                                               }
@@ -722,32 +746,39 @@ export default function Home() {
                                             key={`${parameter.key}-actual`}
                                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof AnalysisResult]}
                                             type="linear"
-                                            stroke="#000000"
+                                            stroke="hsl(var(--foreground))"
                                             strokeWidth={2}
                                             dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
                                             activeDot={{ r: 6, strokeWidth: 2, fill: chartConfig[parameter.key]?.color || '#8884d8' }}
                                             name={parameter.name}
                                             isAnimationActive={false}
-                                            connectNulls={false}
+                                            connectNulls={false} // Do not connect across null (prediction boundary)
                                           />
                                            <Line
                                                 key={`${parameter.key}-prediction`}
                                                 dataKey={(payload: AnalysisResult, index: number) => {
-                                                    const lastActualIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                                                    if (payload.isPrediction || (lastActualIndex !== -1 && index === lastActualIndex -1)) {
+                                                    // Find the index of the first prediction
+                                                    const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
+                                                    // If this payload is a prediction, return its value
+                                                    if (payload.isPrediction) {
                                                         return payload[parameter.key as keyof AnalysisResult];
                                                     }
+                                                    // If this payload is the last actual data point *before* the first prediction, return its value
+                                                    if (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1) {
+                                                        return payload[parameter.key as keyof AnalysisResult];
+                                                    }
+                                                    // Otherwise, return null to create a gap for non-prediction points
                                                     return null;
                                                 }}
-                                                stroke="#000000"
+                                                stroke="hsl(var(--muted-foreground))" // Prediction line color
                                                 type="linear"
                                                 strokeWidth={2}
-                                                strokeDasharray="5 5"
-                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3 }}
-                                                activeDot={false}
+                                                strokeDasharray="5 5" // Dashed line for predictions
+                                                dot={{ fill: chartConfig[parameter.key]?.color || '#8884d8', r: 3, strokeWidth: 0}} // Use parameter color for dots, but maybe smaller/different style?
+                                                activeDot={false} // Disable active dot for predictions
                                                 name={`${parameter.name} (Pred.)`}
                                                 isAnimationActive={false}
-                                                connectNulls={true}
+                                                connectNulls={true} // Connect nulls *within* the prediction line segment
                                              />
 
                                         </LineChart>
@@ -844,4 +875,3 @@ export default function Home() {
     </div>
   );
 }
-
