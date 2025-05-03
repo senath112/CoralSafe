@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -18,6 +19,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+   // Potential fix for Leaflet/react-leaflet issues with SSR/dynamic imports
+   // You might not need this, test first
+   /*
+   webpack: (config, { isServer }) => {
+     if (!isServer) {
+       // Fixes npm packages that depend on `fs` module
+       config.resolve.fallback = {
+         ...config.resolve.fallback,
+         fs: false,
+       };
+     }
+     return config;
+   },
+   */
 };
 
 export default nextConfig;

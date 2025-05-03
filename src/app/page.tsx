@@ -34,15 +34,16 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp } from 'lucide-react'; // Removed MapPin
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin } from 'lucide-react'; // Added MapPin
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
+import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 
 
 // Dynamically import visualization components to avoid SSR issues
-// Removed MapVisualization import
 const DepthVisualization = dynamic(() => import('@/components/DepthVisualization'), { ssr: false });
+const MapVisualization = dynamic(() => import('@/components/MapVisualization'), { ssr: false });
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
@@ -104,11 +105,13 @@ export default function Home() {
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
 
   // State for new inputs
-  // Removed longitude and latitude state
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
   const [depth, setDepth] = useState<string>('');
 
   // State to store values after analysis starts
-  // Removed analyzedLongitude and analyzedLatitude
+  const [analyzedLatitude, setAnalyzedLatitude] = useState<number | null>(null);
+  const [analyzedLongitude, setAnalyzedLongitude] = useState<number | null>(null);
   const [analyzedDepth, setAnalyzedDepth] = useState<number | null>(null);
 
 
@@ -398,9 +401,19 @@ export default function Home() {
       return;
     }
 
-     // Validate Depth
+     // Validate Latitude, Longitude, and Depth
+     const latNum = parseFloat(latitude);
+     const lonNum = parseFloat(longitude);
      const depthNum = parseFloat(depth);
-     // Removed longitude/latitude validation
+
+     if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        toast({ title: 'Input Error', description: 'Invalid Latitude. Must be between -90 and 90.', variant: 'destructive' });
+        return;
+     }
+     if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+        toast({ title: 'Input Error', description: 'Invalid Longitude. Must be between -180 and 180.', variant: 'destructive' });
+        return;
+     }
      if (isNaN(depthNum) || depthNum < 0) {
        toast({ title: 'Input Error', description: 'Invalid Depth. Must be a non-negative number.', variant: 'destructive' });
        return;
@@ -415,8 +428,9 @@ export default function Home() {
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
 
-    // Store submitted depth data
-    // Removed storing longitude/latitude
+    // Store submitted location and depth data
+    setAnalyzedLatitude(latNum);
+    setAnalyzedLongitude(lonNum);
     setAnalyzedDepth(depthNum);
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
@@ -638,7 +652,7 @@ export default function Home() {
       // Ensure progress is 100% visually after loading stops
       setAnalysisProgress(100);
     }
-  }, [sensorData, toast, analysisProgress, depth]); // Removed lat/lon from dependencies
+  }, [sensorData, toast, analysisProgress, latitude, longitude, depth]);
 
 
   return (
@@ -677,9 +691,33 @@ export default function Home() {
           </CardHeader>
           <CardContent>
              {/* New Input Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"> {/* Adjusted grid columns */}
-               {/* Removed Longitude Input */}
-               {/* Removed Latitude Input */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <Label htmlFor="latitude" className="text-foreground flex items-center mb-1">
+                    <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Latitude
+                </Label>
+                <Input
+                  id="latitude"
+                  type="number"
+                  placeholder="e.g., 6.9271"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              <div>
+                <Label htmlFor="longitude" className="text-foreground flex items-center mb-1">
+                    <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/> Longitude
+                </Label>
+                <Input
+                  id="longitude"
+                  type="number"
+                  placeholder="e.g., 79.8612"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
               <div>
                 <Label htmlFor="depth" className="text-foreground flex items-center mb-1">
                   <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Depth (meters)
@@ -706,7 +744,7 @@ export default function Home() {
             />
             <Button
               onClick={analyzeData}
-              disabled={isLoading || !sensorData.trim() || !depth } // Updated disabled condition
+              disabled={isLoading || !sensorData.trim() || !latitude || !longitude || !depth } // Updated disabled condition
               className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
             >
               <Activity className="w-5 h-5 mr-2" /> {isLoading ? 'Analyzing...' : 'Analyze Data'}
@@ -729,10 +767,11 @@ export default function Home() {
             <CardHeader className="flex flex-row items-start sm:items-center justify-between pb-2">
              <div>
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
-                {/* Display Analyzed Depth */}
-                {(analyzedDepth !== null) && ( // Changed condition
+                {/* Display Analyzed Location and Depth */}
+                {(analyzedLatitude !== null && analyzedLongitude !== null && analyzedDepth !== null) && (
                     <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center flex-wrap">
-                        {/* Removed MapPin and Location */}
+                        <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
+                        <span className="mr-3 text-foreground">Lat: {analyzedLatitude.toFixed(4)}, Lon: {analyzedLongitude.toFixed(4)}</span>
                         <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
                         <span className="text-foreground">Depth: {analyzedDepth}m</span>
                     </CardDescription>
@@ -1013,18 +1052,29 @@ export default function Home() {
           </Card>
         )}
 
-         {/* Depth Visualization Section */}
+         {/* Map and Depth Visualization Section */}
          <Card className={cn(
               "mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden",
-              !(analysisResults.length > 0 && analyzedDepth) && "hidden" // Hide card if no data or depth
+              !(analysisResults.length > 0 && analyzedLatitude && analyzedLongitude && analyzedDepth) && "hidden" // Hide card if no data or location/depth
          )}>
              <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">Depth Visualization</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm text-foreground">3D visualization based on provided depth.</CardDescription>
+                <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Map location and 3D visualization based on provided depth.</CardDescription>
              </CardHeader>
              {/* Conditionally render content inside the card */}
-             {(analysisResults.length > 0 && analyzedDepth) && (
-                 <CardContent className="p-4 flex justify-center items-center"> {/* Center content */}
+             {(analysisResults.length > 0 && analyzedLatitude && analyzedLongitude && analyzedDepth) && (
+                 <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                     {/* Map Visualization */}
+                     <div className="flex flex-col items-center">
+                          <h3 className="text-lg font-medium mb-2 text-foreground">Map Location</h3>
+                          <div className="w-full h-[300px] rounded-lg overflow-hidden shadow-md">
+                              <MapVisualization
+                                  latitude={analyzedLatitude}
+                                  longitude={analyzedLongitude}
+                                  depth={analyzedDepth}
+                              />
+                          </div>
+                      </div>
                      {/* Depth Visualization */}
                      <div className="flex flex-col items-center">
                           <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
@@ -1056,7 +1106,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
