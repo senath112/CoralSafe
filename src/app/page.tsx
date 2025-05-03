@@ -34,14 +34,14 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, MapPin, ArrowDownUp } from 'lucide-react'; // Added MapPin, ArrowDownUp
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp } from 'lucide-react'; // Removed MapPin
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
 
 
 // Dynamically import visualization components to avoid SSR issues
-const MapVisualization = dynamic(() => import('@/components/MapVisualization'), { ssr: false });
+// Removed MapVisualization import
 const DepthVisualization = dynamic(() => import('@/components/DepthVisualization'), { ssr: false });
 
 
@@ -104,13 +104,12 @@ export default function Home() {
   const [remainingTimeText, setRemainingTimeText] = useState<string>('');
 
   // State for new inputs
-  const [longitude, setLongitude] = useState<string>('');
-  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>(''); // Keep state if needed for other purposes
+  const [latitude, setLatitude] = useState<string>(''); // Keep state if needed for other purposes
   const [depth, setDepth] = useState<string>('');
 
   // State to store values after analysis starts
-  const [analyzedLongitude, setAnalyzedLongitude] = useState<number | null>(null);
-  const [analyzedLatitude, setAnalyzedLatitude] = useState<number | null>(null);
+  // Removed analyzedLongitude and analyzedLatitude
   const [analyzedDepth, setAnalyzedDepth] = useState<number | null>(null);
 
 
@@ -400,19 +399,9 @@ export default function Home() {
       return;
     }
 
-     // Validate Latitude, Longitude, Depth
-     const lonNum = parseFloat(longitude);
-     const latNum = parseFloat(latitude);
+     // Validate Depth
      const depthNum = parseFloat(depth);
-
-     if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
-       toast({ title: 'Input Error', description: 'Invalid Longitude. Must be between -180 and 180.', variant: 'destructive' });
-       return;
-     }
-     if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-       toast({ title: 'Input Error', description: 'Invalid Latitude. Must be between -90 and 90.', variant: 'destructive' });
-       return;
-     }
+     // Removed longitude/latitude validation
      if (isNaN(depthNum) || depthNum < 0) {
        toast({ title: 'Input Error', description: 'Invalid Depth. Must be a non-negative number.', variant: 'destructive' });
        return;
@@ -427,9 +416,8 @@ export default function Home() {
     console.log("Set loading state, cleared previous results/model, recorded start time.");
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
 
-    // Store submitted location/depth data
-    setAnalyzedLongitude(lonNum);
-    setAnalyzedLatitude(latNum);
+    // Store submitted depth data
+    // Removed storing longitude/latitude
     setAnalyzedDepth(depthNum);
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
@@ -690,33 +678,9 @@ export default function Home() {
           </CardHeader>
           <CardContent>
              {/* New Input Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <div>
-                <Label htmlFor="longitude" className="text-foreground flex items-center mb-1">
-                  <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Longitude
-                </Label>
-                <Input
-                  id="longitude"
-                  type="number"
-                  placeholder="e.g., 145.5"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-              <div>
-                <Label htmlFor="latitude" className="text-foreground flex items-center mb-1">
-                   <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Latitude
-                </Label>
-                <Input
-                  id="latitude"
-                  type="number"
-                  placeholder="e.g., -16.8"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                   className="text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-inner focus:ring-cyan-500 focus:border-cyan-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"> {/* Adjusted grid columns */}
+               {/* Removed Longitude Input */}
+               {/* Removed Latitude Input */}
               <div>
                 <Label htmlFor="depth" className="text-foreground flex items-center mb-1">
                   <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400" /> Depth (meters)
@@ -743,7 +707,7 @@ export default function Home() {
             />
             <Button
               onClick={analyzeData}
-              disabled={isLoading || !sensorData.trim() || !longitude || !latitude || !depth } // Disable if any required field is missing
+              disabled={isLoading || !sensorData.trim() || !depth } // Updated disabled condition
               className="mt-4 w-full bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 transition-all duration-300 transform hover:scale-105 shadow-md text-lg font-semibold py-3 rounded-lg"
             >
               <Activity className="w-5 h-5 mr-2" /> {isLoading ? 'Analyzing...' : 'Analyze Data'}
@@ -766,11 +730,10 @@ export default function Home() {
             <CardHeader className="flex flex-row items-start sm:items-center justify-between pb-2">
              <div>
                 <CardTitle className="text-xl font-semibold text-foreground">Analysis Results</CardTitle>
-                {/* Display Analyzed Location and Depth */}
-                {(analyzedLongitude && analyzedLatitude && analyzedDepth) && (
+                {/* Display Analyzed Depth */}
+                {(analyzedDepth !== null) && ( // Changed condition
                     <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center flex-wrap">
-                        <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
-                        <span className="mr-2 text-foreground">Lon: {analyzedLongitude.toFixed(4)}, Lat: {analyzedLatitude.toFixed(4)}</span>
+                        {/* Removed MapPin and Location */}
                         <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
                         <span className="text-foreground">Depth: {analyzedDepth}m</span>
                     </CardDescription>
@@ -1051,27 +1014,18 @@ export default function Home() {
           </Card>
         )}
 
-         {/* Map and 3D Visualization Section */}
+         {/* Depth Visualization Section */}
          <Card className={cn(
               "mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden",
-              !(analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth) && "hidden" // Hide card if no data
+              !(analysisResults.length > 0 && analyzedDepth) && "hidden" // Hide card if no data or depth
          )}>
              <CardHeader>
-                <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm text-foreground">Map and 3D visualization based on provided coordinates and depth.</CardDescription>
+                <CardTitle className="text-xl font-semibold text-foreground">Depth Visualization</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">3D visualization based on provided depth.</CardDescription>
              </CardHeader>
              {/* Conditionally render content inside the card */}
-             {(analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth) && (
-                 <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Map Visualization */}
-                    <div>
-                        <h3 className="text-lg font-medium mb-2 text-foreground">Map Location</h3>
-                        <MapVisualization
-                            latitude={analyzedLatitude}
-                            longitude={analyzedLongitude}
-                            depth={analyzedDepth}
-                        />
-                    </div>
+             {(analysisResults.length > 0 && analyzedDepth) && (
+                 <CardContent className="p-4 flex justify-center items-center"> {/* Center content */}
                      {/* Depth Visualization */}
                      <div className="flex flex-col items-center">
                           <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
@@ -1103,5 +1057,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 
