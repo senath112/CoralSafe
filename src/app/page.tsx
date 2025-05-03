@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -36,6 +37,12 @@ import Link from 'next/link';
 import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, MapPin, ArrowDownUp } from 'lucide-react'; // Added MapPin, ArrowDownUp
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
+import dynamic from 'next/dynamic'; // Import dynamic
+
+
+// Dynamically import visualization components to avoid SSR issues
+const MapVisualization = dynamic(() => import('@/components/MapVisualization'), { ssr: false });
+const DepthVisualization = dynamic(() => import('@/components/DepthVisualization'), { ssr: false });
 
 
 // Keep these interfaces here or move them to a central types file (e.g., src/types.ts)
@@ -102,9 +109,9 @@ export default function Home() {
   const [depth, setDepth] = useState<string>('');
 
   // State to store values after analysis starts
-  const [analyzedLongitude, setAnalyzedLongitude] = useState<string | null>(null);
-  const [analyzedLatitude, setAnalyzedLatitude] = useState<string | null>(null);
-  const [analyzedDepth, setAnalyzedDepth] = useState<string | null>(null);
+  const [analyzedLongitude, setAnalyzedLongitude] = useState<number | null>(null);
+  const [analyzedLatitude, setAnalyzedLatitude] = useState<number | null>(null);
+  const [analyzedDepth, setAnalyzedDepth] = useState<number | null>(null);
 
 
    useEffect(() => {
@@ -120,10 +127,11 @@ export default function Home() {
           const totalEstimatedTime = elapsed / (analysisProgress / 100);
           let remainingTimeMs = Math.max(0, totalEstimatedTime - elapsed); // Prevent negative time
 
-          // If progress hasn't changed much, it might be stuck, so adjust estimation
-          // This is a simple heuristic, might need refinement
-          if (elapsed > 5000 && analysisProgress < 10) { // If it's been 5s and progress is slow
-            remainingTimeMs *= 2; // Double the estimated remaining time
+          // Simple heuristic adjustment for potentially stuck progress
+          let isStuck = false;
+          if (elapsed > 5000 && analysisProgress < 10) {
+             isStuck = true;
+             remainingTimeMs *= 2; // Double estimate if slow start
           }
 
           const remainingSeconds = Math.max(0, Math.round(remainingTimeMs / 1000));
@@ -131,18 +139,23 @@ export default function Home() {
           const seconds = remainingSeconds % 60;
 
           if (remainingSeconds > 0) { // Only show if there's time remaining
+            const stuckIndicator = isStuck ? " (Recalculating...)" : "";
             if (minutes > 0) {
-              setRemainingTimeText(`~${minutes}m ${seconds}s left`);
+              setRemainingTimeText(`~${minutes}m ${seconds}s left${stuckIndicator}`);
             } else {
-              setRemainingTimeText(`~${seconds}s left`);
+              setRemainingTimeText(`~${seconds}s left${stuckIndicator}`);
             }
           } else {
-            setRemainingTimeText('Finishing up...');
+             // If remaining time is zero but progress not 100, show "Finishing up"
+             setRemainingTimeText(analysisProgress < 100 ? 'Finishing up...' : 'Analysis complete!');
           }
+
         } else if (analysisProgress === 0) {
           setRemainingTimeText('Starting analysis...');
-        } else { // analysisProgress is 100 or calculation yields 0 remaining
-          setRemainingTimeText('Finishing up...');
+        } else if (analysisProgress === 100) {
+           setRemainingTimeText('Analysis complete!');
+        } else {
+            setRemainingTimeText('Finishing up...'); // Catch-all for edge cases
         }
       }, 1000); // Check every second
     } else {
@@ -414,9 +427,9 @@ export default function Home() {
     csvDataRef.current = sensorData; // Store raw CSV data for PDF
 
     // Store submitted location/depth data
-    setAnalyzedLongitude(longitude);
-    setAnalyzedLatitude(latitude);
-    setAnalyzedDepth(depth);
+    setAnalyzedLongitude(lonNum);
+    setAnalyzedLatitude(latNum);
+    setAnalyzedDepth(depthNum);
 
     let trainingResult: { model: tf.Sequential; normParams: NormalizationParams } | null = null;
     let normParamsToDispose: NormalizationParams | null = null; // Track normParams for disposal
@@ -756,7 +769,7 @@ export default function Home() {
                 {(analyzedLongitude && analyzedLatitude && analyzedDepth) && (
                     <CardDescription className="text-sm text-muted-foreground mt-1 flex items-center flex-wrap">
                         <MapPin className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
-                        <span className="mr-2 text-foreground">Lon: {analyzedLongitude}, Lat: {analyzedLatitude}</span>
+                        <span className="mr-2 text-foreground">Lon: {analyzedLongitude.toFixed(4)}, Lat: {analyzedLatitude.toFixed(4)}</span>
                         <ArrowDownUp className="w-4 h-4 mr-1 text-cyan-600 dark:text-cyan-400"/>
                         <span className="text-foreground">Depth: {analyzedDepth}m</span>
                     </CardDescription>
@@ -1037,20 +1050,28 @@ export default function Home() {
           </Card>
         )}
 
-         {/* Map and 3D Visualization Section - Placeholder */}
+         {/* Map and 3D Visualization Section */}
          {analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth && (
              <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
                  <CardHeader>
                     <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
                     <CardDescription className="text-muted-foreground text-sm text-foreground">Map and 3D visualization based on provided coordinates and depth.</CardDescription>
                  </CardHeader>
-                 <CardContent className="p-4">
-                     {/* TODO: Implement Map and 3D Visualization */}
-                     <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-md text-center text-muted-foreground">
-                         Map and 3D visualization components will be added here.
-                         <br />
-                         Longitude: {analyzedLongitude}, Latitude: {analyzedLatitude}, Depth: {analyzedDepth}m
-                     </div>
+                 <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Map Visualization */}
+                    <div>
+                        <h3 className="text-lg font-medium mb-2 text-foreground">Map Location</h3>
+                        <MapVisualization
+                            latitude={analyzedLatitude}
+                            longitude={analyzedLongitude}
+                            depth={analyzedDepth}
+                        />
+                    </div>
+                     {/* Depth Visualization */}
+                     <div className="flex flex-col items-center">
+                          <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
+                          <DepthVisualization depth={analyzedDepth} />
+                      </div>
                  </CardContent>
              </Card>
          )}

@@ -1,0 +1,50 @@
+
+'use client';
+
+import type { FC } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet'; // Import Leaflet library itself
+
+interface MapVisualizationProps {
+  latitude: number;
+  longitude: number;
+  depth: number;
+}
+
+// Fix for default marker icon issue with Webpack
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+
+const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
+  if (typeof window === 'undefined') {
+    // Don't render on the server
+    return null;
+  }
+
+  const position: [number, number] = [latitude, longitude];
+
+  return (
+    <MapContainer center={position} zoom={10} style={{ height: '300px', width: '100%', borderRadius: '8px' }} scrollWheelZoom={false}>
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      <Marker position={position}>
+        <Popup>
+          Location: ({latitude.toFixed(4)}, {longitude.toFixed(4)})<br />
+          Depth: {depth}m
+        </Popup>
+      </Marker>
+    </MapContainer>
+  );
+};
+
+export default MapVisualization;
