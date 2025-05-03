@@ -34,7 +34,7 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Link from 'next/link';
-import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin } from 'lucide-react'; // Keep MapPin for labels if desired
+import { Fish, Waves, Droplet, Thermometer, Beaker, Wind, CloudFog, Activity, Gauge, Loader2, ArrowDownUp, MapPin, TrendingUp } from 'lucide-react'; // Added TrendingUp
 // Import functions from the prediction model file
 import { trainPredictionModel, generatePredictions, type NormalizationParams } from '@/lib/prediction-model';
 import dynamic from 'next/dynamic'; // Import dynamic
@@ -85,6 +85,7 @@ const chartConfig: ChartConfig = {
   dissolvedOxygen: { label: "Dissolved Oxygen (mg/L)", color: "hsl(var(--chart-4))", icon: Wind },
   turbidity: { label: "Turbidity (NTU)", color: "hsl(var(--chart-5))", icon: CloudFog },
   nitrate: { label: "Nitrate (mg/L)", color: "hsl(var(--accent))", icon: Droplet }, // Use accent for nitrate line
+  suitabilityIndex: { label: "Suitability Index", color: "hsl(var(--primary))", icon: TrendingUp }, // Added Suitability Index
   prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
 } satisfies ChartConfig;
 
@@ -926,6 +927,76 @@ export default function Home() {
         {/* Charts Section */}
         {analysisResults.length > 0 && (
           <Accordion type="multiple" className="w-full space-y-4">
+             {/* New Suitability Index Chart */}
+             <AccordionItem value="suitabilityIndex" key="suitabilityIndex" className="border-none">
+                <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
+                  <AccordionTrigger className="text-lg font-medium p-4 hover:no-underline hover:bg-cyan-500/10 dark:hover:bg-cyan-400/10 transition-colors duration-150 rounded-t-xl w-full flex items-center justify-between text-foreground">
+                    <div className="flex items-center">
+                      <TrendingUp className="w-5 h-5 mr-2 text-cyan-500" /> {/* Using TrendingUp icon */}
+                      Overall Suitability Index Trends
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="p-4 border-t border-cyan-200/30 dark:border-cyan-700/30">
+                    <p className="text-sm text-muted-foreground mb-4 text-foreground">
+                      Visualizing the overall Suitability Index (0-100) over time. Predictions are not available for this metric.
+                    </p>
+                    <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={analysisResults.filter(d => !d.isPrediction)} // Only show actual data for suitability index
+                          margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                          <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
+                          <YAxis domain={[0, 100]} stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
+                          <RechartsTooltip
+                            content={
+                              <ChartTooltipContent
+                                indicator="dot"
+                                labelClassName="text-sm font-medium text-foreground"
+                                className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
+                                formatter={(value, name, props) => [`${(value as number).toFixed(0)}`, chartConfig.suitabilityIndex?.label]}
+                              />
+                            }
+                            cursor={{ stroke: "hsl(var(--accent))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                          />
+                           <RechartsLegend content={ <ChartLegendContent
+                                payload={
+                                    Object.entries(chartConfig)
+                                    .filter(([key]) => key === 'suitabilityIndex') // Only show suitability index legend
+                                    .map(([key, config]) => ({
+                                        value: config.label,
+                                        type: 'line',
+                                        id: key,
+                                        color: config.color,
+                                        icon: config.icon
+                                    }))
+                                }
+                                className="text-foreground" // Ensure legend text is visible
+                             /> }
+                            />
+
+                          {/* Line for Suitability Index */}
+                          <Line
+                            key={`suitabilityIndex-actual`}
+                            dataKey='suitabilityIndex'
+                            type="linear"
+                            stroke={chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))'}
+                            strokeWidth={2}
+                            dot={{ fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
+                            activeDot={{ r: 6, strokeWidth: 1, fill: chartConfig.suitabilityIndex?.color || 'hsl(var(--primary))', stroke: 'hsl(var(--foreground))' }}
+                            name={chartConfig.suitabilityIndex?.label || "Suitability Index"}
+                            isAnimationActive={false}
+                            connectNulls={false} // Don't connect if data is missing
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+
+            {/* Individual Parameter Charts */}
             {parameters.map((parameter) => (
               <AccordionItem value={parameter.key} key={parameter.key} className="border-none">
                 <Card className="bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
@@ -1132,3 +1203,5 @@ export default function Home() {
   );
 }
 
+
+    
