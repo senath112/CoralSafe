@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -665,10 +666,7 @@ export default function Home() {
     }
   }, [sensorData, toast, analysisProgress, latitude, longitude, depth]);
 
-  // Get the latest suitability index for the depth visualization
-  const latestSuitabilityIndex = analysisResults.length > 0
-    ? analysisResults.filter(r => !r.isPrediction).slice(-1)[0]?.suitabilityIndex
-    : undefined;
+
 
 
   return (
@@ -1082,8 +1080,8 @@ export default function Home() {
                      {/* Depth Visualization */}
                      <div className="flex flex-col items-center">
                           <h3 className="text-lg font-medium mb-2 text-foreground">Depth Representation</h3>
-                          {/* Pass the latest suitability index */}
-                          <DepthVisualization depth={analyzedDepth} suitabilityIndex={latestSuitabilityIndex} />
+                          {/* Pass only depth, suitabilityIndex is removed */}
+                          <DepthVisualization depth={analyzedDepth} />
                       </div>
                  </CardContent>
              )}
@@ -1111,3 +1109,4 @@ export default function Home() {
     </div>
   );
 }
+
