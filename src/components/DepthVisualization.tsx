@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useRef, useEffect } from 'react';
@@ -83,13 +82,13 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
     const markerX1 = width / 2 - markerWidth / 2;
     const markerX2 = width / 2 + markerWidth / 2;
 
-    // Draw the marker line (WHITE STROKE)
+    // Draw the marker line (BLACK STROKE)
     svg.append('line')
       .attr('x1', markerX1)
       .attr('y1', markerY)
       .attr('x2', markerX2)
       .attr('y2', markerY)
-      .attr('stroke', 'white') // Use white stroke as requested
+      .attr('stroke', 'black') // Use black stroke as requested
       .attr('stroke-width', 2.5) // Slightly thicker
       .attr('stroke-dasharray', '4 2'); // Make it dashed
 
@@ -135,4 +134,3 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
 };
 
 export default DepthVisualization;
-
