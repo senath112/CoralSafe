@@ -13,7 +13,7 @@ interface MapVisualizationProps {
 }
 
 // Fix for default marker icon issue with Webpack
-// @ts-ignore
+// @ts-ignore - This is a known workaround for Leaflet in certain build environments
 delete L.Icon.Default.prototype._getIconUrl;
 
 L.Icon.Default.mergeOptions({
@@ -24,15 +24,25 @@ L.Icon.Default.mergeOptions({
 
 
 const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
+  // Don't render on the server, Leaflet needs the window object
   if (typeof window === 'undefined') {
-    // Don't render on the server
     return null;
   }
 
   const position: [number, number] = [latitude, longitude];
+  // Using latitude and longitude in the key forces React to create a new
+  // MapContainer instance when the location changes, preventing initialization errors.
+  const mapKey = `${latitude}-${longitude}`;
 
   return (
-    <MapContainer center={position} zoom={10} style={{ height: '300px', width: '100%', borderRadius: '8px' }} scrollWheelZoom={false}>
+    <MapContainer
+      key={mapKey} // Add key here
+      center={position}
+      zoom={10}
+      style={{ height: '300px', width: '100%', borderRadius: '8px' }}
+      scrollWheelZoom={false}
+      className="z-0" // Ensure map is behind popups if necessary
+      >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
