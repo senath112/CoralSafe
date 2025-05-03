@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'; // Import Input
 import { Label } from '@/components/ui/label'; // Import Label
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex } from '@/lib/utils';
+import { cn, defineSensorDataThresholds, analyzeSensorData, calculateSuitabilityIndex } from '@/lib/utils'; // Import cn
 import {
   ChartContainer,
   ChartTooltip,
@@ -1052,12 +1052,16 @@ export default function Home() {
         )}
 
          {/* Map and 3D Visualization Section */}
-         {analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth && (
-             <Card className="mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden">
-                 <CardHeader>
-                    <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
-                    <CardDescription className="text-muted-foreground text-sm text-foreground">Map and 3D visualization based on provided coordinates and depth.</CardDescription>
-                 </CardHeader>
+         <Card className={cn(
+              "mt-8 bg-white/90 dark:bg-slate-900/90 text-foreground shadow-xl rounded-xl backdrop-blur-md border border-white/30 overflow-hidden",
+              !(analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth) && "hidden" // Hide card if no data
+         )}>
+             <CardHeader>
+                <CardTitle className="text-xl font-semibold text-foreground">Location & Depth Visualization</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm text-foreground">Map and 3D visualization based on provided coordinates and depth.</CardDescription>
+             </CardHeader>
+             {/* Conditionally render content inside the card */}
+             {(analysisResults.length > 0 && analyzedLongitude && analyzedLatitude && analyzedDepth) && (
                  <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Map Visualization */}
                     <div>
@@ -1074,8 +1078,8 @@ export default function Home() {
                           <DepthVisualization depth={analyzedDepth} />
                       </div>
                  </CardContent>
-             </Card>
-         )}
+             )}
+         </Card>
 
       </div>
 
@@ -1099,4 +1103,5 @@ export default function Home() {
     </div>
   );
 }
+
 

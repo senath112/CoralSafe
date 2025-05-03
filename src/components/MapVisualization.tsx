@@ -4,8 +4,8 @@
 import type { FC } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import { useEffect, useState } from 'react'; // Added useState
+import L, { type Map } from 'leaflet'; // Import Map type from leaflet
+import { useEffect, useState, useRef } from 'react'; // Added useRef
 
 interface MapVisualizationProps {
   latitude: number;
@@ -35,10 +35,20 @@ const ChangeView: FC<{ center: [number, number]; zoom: number }> = ({ center, zo
 
 const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, depth }) => {
   const [isClient, setIsClient] = useState(false);
+  const mapRef = useRef<Map | null>(null); // Ref to store map instance
 
   useEffect(() => {
     setIsClient(true); // Will only run on client after mount
-  }, []);
+
+    // Cleanup function to remove map instance on unmount
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null; // Important to nullify the ref
+        console.log("Leaflet map removed");
+      }
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount and unmount
 
   // Render placeholder on server OR before client-side mount
   if (!isClient) {
@@ -50,25 +60,31 @@ const MapVisualization: FC<MapVisualizationProps> = ({ latitude, longitude, dept
   const zoomLevel = 10;
 
   return (
-    <MapContainer
-      center={position}
-      zoom={zoomLevel}
-      style={{ height: '300px', width: '100%', borderRadius: '8px' }}
-      scrollWheelZoom={false}
-      className="z-0" // Ensure z-index doesn't interfere
-    >
-      <ChangeView center={position} zoom={zoomLevel} /> {/* Add this component */}
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <Marker position={position}>
-        <Popup>
-          Location: ({latitude.toFixed(4)}, {longitude.toFixed(4)})<br />
-          Depth: {depth}m
-        </Popup>
-      </Marker>
-    </MapContainer>
+    <div style={{ height: '300px', width: '100%' }}>
+      {/* Conditionally render MapContainer to ensure it's only created once */}
+      {/* Use a key based on lat/lon if you need it to re-render on location change, but this might re-trigger the error */}
+      {/* A better approach is using ChangeView component inside */}
+      <MapContainer
+        center={position}
+        zoom={zoomLevel}
+        style={{ height: '100%', width: '100%', borderRadius: '8px' }}
+        scrollWheelZoom={false}
+        className="z-0" // Ensure z-index doesn't interfere
+        whenCreated={(mapInstance) => { mapRef.current = mapInstance; }} // Store map instance
+      >
+        <ChangeView center={position} zoom={zoomLevel} /> {/* Use this to update view */}
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <Marker position={position}>
+          <Popup>
+            Location: ({latitude.toFixed(4)}, {longitude.toFixed(4)})<br />
+            Depth: {depth}m
+          </Popup>
+        </Marker>
+      </MapContainer>
+    </div>
   );
 };
 
