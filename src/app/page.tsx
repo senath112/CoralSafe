@@ -17,7 +17,7 @@ import {
   ChartLegendContent,
 } from '@/components/ui/chart';
 import type { ChartConfig } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer, AreaChart, Area, Bar, Cell } from 'recharts'; // Added Bar, Cell
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as tf from '@tensorflow/tfjs'; // Still needed for tf.dispose
@@ -89,7 +89,7 @@ const chartConfig: ChartConfig = {
   prediction: { label: "Prediction", color: "hsl(var(--muted-foreground))", icon: () => <path d="M3 3v18h18" fill="none" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="stroke-muted-foreground" /> },
 } satisfies ChartConfig;
 
-// --- Helper function to generate gradient definitions ---
+// --- Helper function to generate gradient definitions for Area fills ---
 const renderGradientDefs = (config: ChartConfig, parameters: { key: string }[]) => {
   const gradientIds = new Set<string>(); // Track generated IDs to avoid duplicates
 
@@ -996,17 +996,7 @@ export default function Home() {
                           data={analysisResults.filter(d => !d.isPrediction)} // Only show actual data for suitability index
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
-                           {/* Background Gradient based on suitability */}
-                           <defs>
-                             <linearGradient id="suitabilityBackgroundGradient" x1="0" y1="0" x2="0" y2="1">
-                               {/* Gradient stops based on suitability index */}
-                               <stop offset="0%" stopColor="hsl(0, 70%, 80%)" stopOpacity={0.3} />   {/* Red-ish at bottom (low suitability) */}
-                               <stop offset="50%" stopColor="hsl(45, 90%, 85%)" stopOpacity={0.3} />  {/* Yellow-ish in middle */}
-                               <stop offset="100%" stopColor="hsl(120, 60%, 80%)" stopOpacity={0.3} /> {/* Green-ish at top (high suitability) */}
-                             </linearGradient>
-                           </defs>
-                           <rect x="0" y="0" width="100%" height="100%" fill="url(#suitabilityBackgroundGradient)" />
-
+                           {/* Removed background gradient based on suitability */}
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                           <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
                           <YAxis domain={[0, 100]} stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
@@ -1037,16 +1027,7 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Area for Suitability Index Fill */}
-                           <Area
-                             key={`suitabilityIndex-fill`}
-                             dataKey='suitabilityIndex'
-                             type="linear"
-                             fill={`url(#suitabilityGradient)`} // Use gradient fill
-                             stroke="none" // No stroke for the fill area
-                             isAnimationActive={false}
-                             connectNulls={false} // Don't connect if data is missing
-                           />
+                          {/* Area for Suitability Index Fill - Removed */}
                            {/* Line to connect the dots */}
                            <Line
                              key={`suitabilityIndex-line`}
@@ -1083,21 +1064,11 @@ export default function Home() {
                     </p>
                     <ChartContainer config={chartConfig} className="aspect-video h-[300px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart
+                        <LineChart // Changed to LineChart
                           data={analysisResults}
                           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                         >
-                           {/* Background Gradient based on suitability */}
-                           <defs>
-                             <linearGradient id={`${parameter.key}BackgroundGradient`} x1="0" y1="0" x2="0" y2="1">
-                               {/* Gradient stops based on suitability index */}
-                               <stop offset="0%" stopColor="hsl(0, 70%, 80%)" stopOpacity={0.3} />   {/* Red-ish at bottom (low suitability) */}
-                               <stop offset="50%" stopColor="hsl(45, 90%, 85%)" stopOpacity={0.3} />  {/* Yellow-ish in middle */}
-                               <stop offset="100%" stopColor="hsl(120, 60%, 80%)" stopOpacity={0.3} /> {/* Green-ish at top (high suitability) */}
-                             </linearGradient>
-                           </defs>
-                           <rect x="0" y="0" width="100%" height="100%" fill={`url(#${parameter.key}BackgroundGradient)`} />
-
+                           {/* Removed background gradient */}
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                           <XAxis dataKey="time" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} padding={{ left: 10, right: 10 }} />
                           <YAxis stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
@@ -1128,16 +1099,7 @@ export default function Home() {
                              /> }
                             />
 
-                          {/* Area for actual data fill */}
-                           <Area
-                             key={`${parameter.key}-actual-fill`}
-                             dataKey={(payload: AnalysisResult) => payload.isPrediction ? null : payload[parameter.key as keyof SensorData]}
-                             type="linear"
-                             fill={`url(#${parameter.key}Gradient)`} // Use gradient fill for area
-                             stroke="none" // No stroke for the fill area
-                             isAnimationActive={false}
-                             connectNulls={false} // Do not connect across the prediction boundary
-                           />
+                          {/* Removed Area fills */}
                             {/* Line for actual data */}
                             <Line
                                 key={`${parameter.key}-actual-line`}
@@ -1152,22 +1114,6 @@ export default function Home() {
                                 connectNulls={false} // Do not connect across the prediction boundary
                              />
 
-                           {/* Area for predicted data fill */}
-                           <Area
-                             key={`${parameter.key}-prediction-fill`}
-                             dataKey={(payload: AnalysisResult, index: number) => {
-                               const firstPredictionIndex = analysisResults.findIndex(d => d.isPrediction === true);
-                               if (payload.isPrediction || (firstPredictionIndex !== -1 && index === firstPredictionIndex - 1)) {
-                                 return payload[parameter.key as keyof SensorData];
-                               }
-                               return null;
-                             }}
-                             type="linear"
-                             fill={`url(#predictionGradient)`} // Use prediction gradient fill
-                             stroke="none" // No stroke for the fill area
-                             isAnimationActive={false}
-                             connectNulls={true} // Connect prediction points to each other and the last actual point
-                           />
                             {/* Line for predicted data */}
                            <Line
                                 key={`${parameter.key}-prediction-line`}
@@ -1188,7 +1134,7 @@ export default function Home() {
                                 isAnimationActive={false}
                                 connectNulls={true} // Connect prediction points to each other and the last actual point
                            />
-                        </AreaChart>
+                        </LineChart>
                       </ResponsiveContainer>
                     </ChartContainer>
                   </AccordionContent>
@@ -1225,49 +1171,35 @@ export default function Home() {
                              });
 
                              return (
-                                 <AreaChart // Using AreaChart frame for consistency, but Bars inside
-                                    data={averages}
-                                    layout="vertical" // Vertical Bar Chart
-                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false}/>
-                                    <XAxis type="number" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
-                                    <YAxis dataKey="name" type="category" stroke="hsl(var(--foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} width={150} />
-                                    <RechartsTooltip
-                                        content={
-                                            <ChartTooltipContent
-                                                labelClassName="text-sm font-medium text-foreground"
-                                                className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
-                                                formatter={(value, name) => [`${(value as number).toFixed(2)}`, name]} // Show value with 2 decimal places
-                                                cursor={{ fill: 'hsl(var(--accent)/0.2)' }}
-                                            />
-                                        }
-                                    />
-                                    {/* Render Bars - One Area component per bar, effectively */}
-                                    {averages.map((entry, index) => (
-                                         <Area
-                                             key={`bar-${entry.name}`}
-                                             dataKey="value"
-                                             type="monotone"
-                                             fill={entry.fill}
-                                             stroke={entry.fill}
-                                             name={entry.name}
-                                             isAnimationActive={false}
-                                             // Hacky way to make Area act like Bar
-                                             // This approach might need refinement or switching to BarChart if available/preferred
-                                             stackId="a" // Stacking ensures bars are side-by-side if needed, here it just helps rendering
-                                             shape={<div/>} // Using div to avoid default Area shape rendering if possible? Needs testing.
-                                             // Ideally use <Bar> component if switching chart type
-                                         />
-                                     ))}
-                                    {/* Alternative using Recharts Bar if you change to BarChart:
-                                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                      {averages.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                                      ))}
-                                    </Bar>
-                                    */}
-                                 </AreaChart>
+                                 // Note: Using AreaChart frame but Bar component is more appropriate
+                                 // Consider switching to <BarChart> if layout issues arise or for clarity
+                                 <ResponsiveContainer width="100%" height="100%">
+                                     <AreaChart // Or use <BarChart>
+                                        data={averages}
+                                        layout="vertical" // Vertical Bar Chart
+                                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false}/>
+                                        <XAxis type="number" stroke="hsl(var(--foreground))" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} />
+                                        <YAxis dataKey="name" type="category" stroke="hsl(var(--foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }} axisLine={false} tickLine={false} width={150} />
+                                        <RechartsTooltip
+                                            content={
+                                                <ChartTooltipContent
+                                                    labelClassName="text-sm font-medium text-foreground"
+                                                    className="rounded-lg border border-border/50 bg-background/90 p-2 shadow-lg backdrop-blur-sm text-foreground"
+                                                    formatter={(value, name) => [`${(value as number).toFixed(2)}`, name]} // Show value with 2 decimal places
+                                                    cursor={{ fill: 'hsl(var(--accent)/0.2)' }}
+                                                />
+                                            }
+                                        />
+                                         {/* Use Bar component */}
+                                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                           {averages.map((entry, index) => (
+                                             <Cell key={`cell-${index}`} fill={entry.fill} />
+                                           ))}
+                                         </Bar>
+                                     </AreaChart>
+                                 </ResponsiveContainer>
                              );
                          })()}
                       </ResponsiveContainer>
