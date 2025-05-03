@@ -17,6 +17,8 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
   const coneTopMargin = height * 0.1; // Margin from SVG top
   const coneBottomMargin = height * 0.1; // Margin from SVG bottom
   const coneMaxHeight = height - coneTopMargin - coneBottomMargin; // Max visual height of the cone
+  // Calculate coneBaseWidth outside useEffect
+  const coneBaseWidth = coneMaxHeight * 0.4; // Adjust base width proportion if needed
 
   useEffect(() => {
     if (!ref.current) return;
@@ -25,7 +27,6 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
     svg.selectAll("*").remove(); // Clear previous drawings
 
     // --- Cone representing 0m to 50m depth ---
-    const coneBaseWidth = coneMaxHeight * 0.4; // Adjust base width proportion if needed
 
     // Inverted cone points (tip at the bottom center, base at the top)
     const points: [number, number][] = [
@@ -119,7 +120,7 @@ const DepthVisualization: React.FC<DepthVisualizationProps> = ({ depth }) => {
        .text(`${maxDepthScale}m`);
 
 
-  }, [depth, height, width, coneMaxHeight, coneBaseWidth, coneTopMargin, coneBottomMargin]); // Update dependencies
+  }, [depth, height, width, coneMaxHeight, coneBaseWidth, coneTopMargin, coneBottomMargin]); // Include coneBaseWidth here now
 
   return (
     <div className="flex justify-center items-center w-full h-full">
