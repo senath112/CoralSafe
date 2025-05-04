@@ -2,7 +2,7 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/dedd2488-a3eb-48da-8e29-a7e6eae5f947/deploy-status)](https://app.netlify.com/sites/statuesque-cassata-e55aad/deploys)
 <img width="1503" alt="Screenshot 2025-05-01 at 16 12 28" src="https://github.com/user-attachments/assets/b0678945-821f-4514-8a75-4847ac0db995" />
-# 🌊 Mariana V2.0 — Intelligent Coral Reef Monitoring System
+# 🌊 Mariana V2.5 — Intelligent Coral Reef Monitoring System
 
 **Official Release Date:** May 1st, 2025  
 **Developer:** [Senath Sethmika](mailto:senathsethmika@gmail.com) | [LinkedIn](https://www.linkedin.com/in/senath-sethmika-b8584a268/) | [Facebook](https://www.facebook.com/senath.sethmika/)
