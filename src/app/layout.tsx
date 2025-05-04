@@ -2,6 +2,7 @@
 import type {Metadata} from 'next';
 import { Inter } from 'next/font/google'; // Import Inter font
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
+import { ThemeProvider } from "@/components/theme-provider"; // Import ThemeProvider
 import './globals.css';
 
 // Initialize Inter font
@@ -21,11 +22,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable}`}>
+    <html lang="en" className={`${inter.variable}`} suppressHydrationWarning> {/* Add suppressHydrationWarning */}
       {/* Ensure no whitespace between <html> and <body> */}
       <body className={`font-sans antialiased`}> {/* Use font-sans utility class */}
-         {children}
-         <Toaster /> {/* Add Toaster component here */}
+         <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster /> {/* Add Toaster component here */}
+         </ThemeProvider>
       </body>
     </html>
   );
