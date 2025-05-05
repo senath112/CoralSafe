@@ -9,7 +9,7 @@
 
 ---
 
-Mariana V2.0 is a next-generation marine monitoring system designed to predict and protect coral reef health. Powered by environmental datasets and a Machine Learning model built using the **Gemini API**, it evaluates coral supportiveness using real-time marine parameters.
+Mariana V2.5 is a next-generation marine monitoring system designed to predict and protect coral reef health. Powered by environmental datasets and a Machine Learning model built using the **Gemini API**, it evaluates coral supportiveness using real-time marine parameters.
 
 > **“Protecting coral reefs through data, AI, and clean design.”**
 This dataset contains **simulated marine environmental data** collected from **Reef_A** during April 2025, recorded at 6-hour intervals.
