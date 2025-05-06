@@ -134,43 +134,34 @@ body {
   background: hsl(var(--primary) / 0.8);
 }
 
-/* Additional Responsive Adjustments */
+/* Mobile Responsiveness Adjustments */
 @media (max-width: 640px) { /* Target small screens (sm breakpoint in Tailwind) */
-  /* Reduce padding on main container */
-  .px-4 {
-    padding-left: 0.5rem; /* 8px */
-    padding-right: 0.5rem; /* 8px */
+  /* Removed problematic .sm\\:table-cell and .sm\\:hidden rules */
+  /* Note: Use Tailwind classes like 'hidden sm:table-cell' directly in JSX */
+
+  /* Adjust card padding for smaller screens */
+  .card-content-mobile {
+      @apply p-4; /* Example: reduce padding on mobile */
   }
-  .sm\:px-6 { /* Adjust if needed */
-     padding-left: 0.5rem;
-     padding-right: 0.5rem;
+  .card-header-mobile {
+      @apply p-4; /* Example: reduce padding on mobile */
   }
 
-  /* Reduce chart height slightly on mobile */
-  .aspect-video {
-    /* Maintain aspect ratio, maybe adjust min-height if needed */
+  /* Adjust chart container height for smaller screens */
+  .chart-container-mobile {
+      @apply h-[250px]; /* Example: reduce height */
   }
-  .h-\[250px\] {
-    height: 200px; /* Reduce height for mobile */
+
+   /* Reduce header font size */
+  .header-mobile h1 {
+    @apply text-3xl;
   }
-   .sm\:h-\[300px\] {
-     /* This will apply on sm screens and up, overriding the previous rule */
-   }
-
-  /* Adjust font sizes for smaller elements like axis ticks and legends */
-  .text-xs {
-     /* Keep as is or potentially make slightly smaller if needed */
-     /* font-size: 0.65rem; */
+  .header-mobile p {
+    @apply text-base;
   }
-   .text-sm {
-     /* Adjust base text size slightly if needed */
-     /* font-size: 0.8rem; */
-   }
 
-   /* Ensure accordions have reasonable tap targets */
-   .py-1 {
-     padding-top: 0.5rem; /* Increase vertical padding for easier tapping */
-     padding-bottom: 0.5rem;
-   }
-
+  /* Ensure buttons are easily tappable */
+  .button-mobile {
+     @apply py-3 px-5; /* Slightly larger tap area */
+  }
 }
